@@ -1,0 +1,24 @@
+{
+  "name": "physiocore",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PhysioCore - Multi-tenant physiotherapy hospital management system",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:api": "pnpm --filter @physiocore/api dev",
+    "dev:worker": "pnpm --filter @physiocore/worker dev",
+    "dev:web": "pnpm --filter @physiocore/web dev",
+    "build": "pnpm -r run build",
+    "db:generate": "pnpm --filter @physiocore/db generate",
+    "db:migrate": "pnpm --filter @physiocore/db migrate",
+    "db:push": "pnpm --filter @physiocore/db push",
+    "db:seed": "pnpm --filter @physiocore/db seed",
+    "db:studio": "pnpm --filter @physiocore/db studio",
+    "test": "pnpm -r run test",
+    "test:api": "pnpm --filter @physiocore/api test",
+    "lint": "pnpm -r run lint"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

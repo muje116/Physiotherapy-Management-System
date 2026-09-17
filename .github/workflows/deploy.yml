@@ -1,0 +1,25 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Deploy API
+        run: |
+          # Example: Deploy to Railway/Fly/Heroku
+          echo "Deploying API..."
+      - name: Run migrations
+        run: |
+          echo "Running migrations on production DB..."
