@@ -131,4 +131,14 @@ export default async function patientRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: timeline });
     }
   );
+
+  fastify.get(
+    '/patients/:patientId/history',
+    { preHandler: [requirePermission('patient:read')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { patientId } = request.params as { patientId: string };
+      const history = await patientService.getHistory(request.tenantId, patientId, request.user.id, request.user.role);
+      return reply.send({ success: true, data: history });
+    }
+  );
 }

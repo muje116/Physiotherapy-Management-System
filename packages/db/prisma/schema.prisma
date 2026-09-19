@@ -76,26 +76,37 @@ model Tenant {
   clientTasks           ClientTask[]
   reportExports         ReportExport[]
   feedback              PatientFeedback[]
+  assets                Asset[]
+  drugInventory         DrugInventory[]
+  drugStockMovements    DrugStockMovement[]
   settings              TenantSettings?
 }
 
 model User {
-  id           String    @id @default(uuid())
-  tenantId     String
-  email        String
-  passwordHash String
-  firstName    String
-  lastName     String
-  role         Role
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  tenantId       String
+  email          String
+  passwordHash   String
+  firstName      String
+  lastName       String
+  employeeNumber String?
+  jobTitle       String?
+  department     String?
+  phone          String?
+  hireDate       DateTime?
+  role           Role
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  therapist     Therapist?
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  tenant                Tenant              @relation(fields: [tenantId], references: [id])
+  therapist             Therapist?
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+  assignedAssets        Asset[]             @relation("AssignedAssets")
+  issuedDrugMovements   DrugStockMovement[] @relation("DrugMovementRecorder")
+  receivedDrugMovements DrugStockMovement[] @relation("DrugMovementRecipient")
 
   @@unique([tenantId, email])
 }
@@ -160,7 +171,7 @@ model Patient {
   createdAt                         DateTime  @default(now())
   updatedAt                         DateTime  @updatedAt
 
-  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
   appointments    Appointment[]
   soapNotes       SoapNote[]
   invoices        Invoice[]
@@ -174,6 +185,7 @@ model Patient {
   treatmentPlans  TreatmentPlan[]
   clientTasks     ClientTask[]
   feedback        PatientFeedback[]
+  drugIssues      DrugStockMovement[]
 
   @@unique([tenantId, patientCode])
 }
@@ -595,19 +607,19 @@ model ClientTask {
 }
 
 model ReportExport {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenantId    String
   requestedBy String
   type        String
   format      String
   startDate   DateTime
   endDate     DateTime
-  status      String   @default("QUEUED")
+  status      String    @default("QUEUED")
   fileName    String?
   mimeType    String?
   fileData    Bytes?
   error       String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   completedAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -627,4 +639,88 @@ model PatientFeedback {
   patient Patient @relation(fields: [patientId], references: [id])
 
   @@index([tenantId, createdAt])
+}
+
+enum AssetStatus {
+  IN_SERVICE
+  MAINTENANCE
+  RETIRED
+  LOST
+}
+
+model Asset {
+  id                String      @id @default(uuid())
+  tenantId          String
+  assetTag          String
+  name              String
+  category          String
+  description       String?
+  serialNumber      String?
+  location          String?
+  status            AssetStatus @default(IN_SERVICE)
+  condition         String      @default("GOOD")
+  purchaseDate      DateTime?
+  purchaseCost      Decimal?    @db.Decimal(12, 2)
+  warrantyExpiresAt DateTime?
+  assignedToUserId  String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  assignedTo User?  @relation("AssignedAssets", fields: [assignedToUserId], references: [id])
+
+  @@unique([tenantId, assetTag])
+  @@index([tenantId, status])
+}
+
+model DrugInventory {
+  id              String    @id @default(uuid())
+  tenantId        String
+  name            String
+  genericName     String?
+  strength        String?
+  dosageForm      String?
+  unit            String    @default("unit")
+  batchNumber     String    @default("UNSPECIFIED")
+  expiryDate      DateTime?
+  supplier        String?
+  storageLocation String?
+  quantityOnHand  Int       @default(0)
+  reorderLevel    Int       @default(0)
+  unitCost        Decimal?  @db.Decimal(12, 2)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id])
+  movements DrugStockMovement[]
+
+  @@unique([tenantId, name, strength, batchNumber])
+  @@index([tenantId, expiryDate])
+}
+
+model DrugStockMovement {
+  id               String   @id @default(uuid())
+  tenantId         String
+  drugInventoryId  String
+  type             String
+  quantity         Int
+  quantityDelta    Int
+  patientId        String?
+  recipientUserId  String?
+  recordedByUserId String
+  reason           String?
+  reference        String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  drugInventory DrugInventory @relation(fields: [drugInventoryId], references: [id])
+  patient       Patient?      @relation(fields: [patientId], references: [id])
+  recipientUser User?         @relation("DrugMovementRecipient", fields: [recipientUserId], references: [id])
+  recordedBy    User          @relation("DrugMovementRecorder", fields: [recordedByUserId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, patientId, createdAt])
+  @@index([drugInventoryId, createdAt])
 }

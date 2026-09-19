@@ -98,7 +98,7 @@ export async function getById(tenantId: string, patientId: string, userId?: stri
     where,
     include: {
       therapists: { include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } } },
-      _count: { select: { appointments: true, invoices: true, soapNotes: true, exercisePlans: true, outcomeMeasures: true } },
+      _count: { select: { appointments: true, invoices: true, soapNotes: true, exercisePlans: true, outcomeMeasures: true, drugIssues: true } },
     },
   });
 
@@ -220,48 +220,144 @@ export async function getOutcomeMeasures(tenantId: string, patientId: string, us
   });
 }
 
-export async function getTimeline(tenantId: string, patientId: string, userId?: string, userRole?: string) {
+export async function getHistory(tenantId: string, patientId: string, userId?: string, userRole?: string) {
   await verifyPatientAccess(tenantId, patientId, userId, userRole);
 
-  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, clientTasks] = await Promise.all([
-    prisma.appointment.findMany({ where: { patientId, tenantId } }),
-    prisma.soapNote.findMany({ where: { patientId, tenantId } }),
-    prisma.invoice.findMany({ where: { patientId, tenantId } }),
-    prisma.exercisePlan.findMany({ where: { patientId, tenantId }, include: { items: true } }),
-    prisma.treatmentPlan.findMany({ where: { patientId, tenantId } }),
-    prisma.outcomeMeasure.findMany({ where: { patientId, tenantId } }),
-    prisma.payment.findMany({ where: { patientId, tenantId } }),
-    prisma.clientTask.findMany({ where: { patientId, tenantId } }),
+  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, clientTasks, schemeClaims, followUps, reminderLogs, feedback, drugIssues] = await Promise.all([
+    prisma.appointment.findMany({
+      where: { patientId, tenantId },
+      include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } },
+      orderBy: { startAt: 'desc' },
+    }),
+    prisma.soapNote.findMany({
+      where: { patientId, tenantId },
+      include: { appointment: { include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.invoice.findMany({ where: { patientId, tenantId }, orderBy: { createdAt: 'desc' } }),
+    prisma.exercisePlan.findMany({ where: { patientId, tenantId }, include: { items: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.treatmentPlan.findMany({ where: { patientId, tenantId }, include: { stages: { orderBy: { order: 'asc' } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.outcomeMeasure.findMany({ where: { patientId, tenantId }, orderBy: { recordedAt: 'desc' } }),
+    prisma.payment.findMany({ where: { patientId, tenantId }, include: { paymentMethod: true }, orderBy: { paidAt: 'desc' } }),
+    prisma.clientTask.findMany({ where: { patientId, tenantId }, include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.schemeClaim.findMany({ where: { patientId, tenantId }, include: { scheme: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.followUp.findMany({ where: { patientId, tenantId }, include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.reminderLog.findMany({ where: { patientId, tenantId }, orderBy: { sentAt: 'desc' } }),
+    prisma.patientFeedback.findMany({ where: { patientId, tenantId }, orderBy: { createdAt: 'desc' } }),
+    prisma.drugStockMovement.findMany({
+      where: { patientId, tenantId, type: 'ISSUE' },
+      include: { drugInventory: true, recordedBy: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
+  const therapistName = (therapist: any) => therapist?.user
+    ? `${therapist.user.firstName} ${therapist.user.lastName}`
+    : undefined;
   const timeline: any[] = [];
+  const add = (type: string, date: Date, title: string, summary: string, data: any, actor?: string) => {
+    timeline.push({ type, date, title, summary, actor, data });
+  };
 
-  appointments.forEach((a) =>
-    timeline.push({ type: 'appointment', date: a.startAt, data: a })
-  );
-  notes.forEach((n) =>
-    timeline.push({ type: 'soap_note', date: n.createdAt, data: n })
-  );
-  invoices.forEach((i) =>
-    timeline.push({ type: 'invoice', date: i.createdAt, data: i })
-  );
-  exercisePlans.forEach((ep) =>
-    timeline.push({ type: 'exercise_plan', date: ep.createdAt, data: ep })
-  );
-  treatmentPlans.forEach((plan) =>
-    timeline.push({ type: 'treatment_plan', date: plan.createdAt, data: plan })
-  );
-  outcomeMeasures.forEach((measure) =>
-    timeline.push({ type: 'outcome_measure', date: measure.recordedAt, data: measure })
-  );
-  payments.forEach((payment) =>
-    timeline.push({ type: 'payment', date: payment.paidAt || payment.createdAt, data: payment })
-  );
-  clientTasks.forEach((task) =>
-    timeline.push({ type: 'client_task', date: task.createdAt, data: task })
-  );
+  appointments.forEach((appointment: any) => add(
+    'appointment', appointment.startAt, 'Appointment',
+    `${appointment.type} - ${appointment.status}`, appointment, therapistName(appointment.therapist),
+  ));
+  notes.forEach((note: any) => add(
+    'soap_note', note.createdAt, 'SOAP note',
+    note.assessment || note.complaint || 'Clinical note recorded', note, therapistName(note.appointment?.therapist),
+  ));
+  invoices.forEach((invoice: any) => add(
+    'invoice', invoice.createdAt, 'Invoice',
+    `${invoice.invoiceNumber} - ${invoice.status} - ${invoice.total}`, invoice,
+  ));
+  exercisePlans.forEach((plan: any) => add(
+    'exercise_plan', plan.createdAt, 'Exercise plan',
+    `${plan.name} (${plan.items?.length || 0} exercises)`, plan,
+  ));
+  treatmentPlans.forEach((plan: any) => add(
+    'treatment_plan', plan.createdAt, 'Treatment plan',
+    `${plan.name} - ${plan.status}`, plan,
+  ));
+  outcomeMeasures.forEach((measure: any) => add(
+    'outcome_measure', measure.recordedAt, `${measure.type} outcome measure`,
+    `${measure.score} / ${measure.maxScore} (${measure.percentage}%)`, measure,
+  ));
+  payments.forEach((payment: any) => add(
+    'payment', payment.paidAt || payment.createdAt, 'Payment',
+    `${payment.amount} via ${payment.methodName} - ${payment.status}`, payment,
+  ));
+  clientTasks.forEach((task: any) => add(
+    'client_task', task.createdAt, 'Patient task',
+    `${task.title} - ${task.status}`, task, therapistName(task.therapist),
+  ));
+  schemeClaims.forEach((claim: any) => add(
+    'scheme_claim', claim.createdAt, 'Medical scheme claim',
+    `${claim.scheme?.name || 'Medical scheme'} - ${claim.status} - ${claim.amount}`, claim,
+  ));
+  followUps.forEach((followUp: any) => add(
+    'follow_up', followUp.createdAt, 'Follow-up',
+    `${followUp.type} - ${followUp.status}`, followUp, therapistName(followUp.therapist),
+  ));
+  reminderLogs.forEach((reminder: any) => add(
+    'reminder', reminder.sentAt, 'Reminder',
+    `${reminder.channel} - ${reminder.status}`, reminder,
+  ));
+  feedback.forEach((item: any) => add(
+    'feedback', item.createdAt, 'Patient feedback',
+    `${item.rating}/5${item.comment ? ` - ${item.comment}` : ''}`, item,
+  ));
+  drugIssues.forEach((issue: any) => add(
+    'drug_issue', issue.createdAt, 'Medication issued',
+    `${issue.drugInventory?.name || 'Medication'} x${issue.quantity} ${issue.drugInventory?.unit || 'unit(s)'}`,
+    issue, issue.recordedBy ? `${issue.recordedBy.firstName} ${issue.recordedBy.lastName}` : undefined,
+  ));
 
   timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  return timeline;
+  const totalInvoiced = invoices
+    .filter((invoice: any) => invoice.status !== 'VOID')
+    .reduce((sum: number, invoice: any) => sum + Number(invoice.total || 0), 0);
+  const totalPaid = payments
+    .filter((payment: any) => payment.status === 'COMPLETED')
+    .reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+
+  return {
+    summary: {
+      appointments: appointments.length,
+      completedAppointments: appointments.filter((item: any) => item.status === 'COMPLETED').length,
+      soapNotes: notes.length,
+      treatmentPlans: treatmentPlans.length,
+      exercisePlans: exercisePlans.length,
+      outcomeMeasures: outcomeMeasures.length,
+      invoices: invoices.length,
+      payments: payments.length,
+      medicationIssues: drugIssues.length,
+      tasks: clientTasks.length,
+      totalInvoiced,
+      totalPaid,
+      outstandingBalance: Math.max(totalInvoiced - totalPaid, 0),
+    },
+    records: {
+      appointments,
+      soapNotes: notes,
+      invoices,
+      exercisePlans,
+      treatmentPlans,
+      outcomeMeasures,
+      payments,
+      clientTasks,
+      schemeClaims,
+      followUps,
+      reminderLogs,
+      feedback,
+      drugIssues,
+    },
+    timeline,
+  };
+}
+
+export async function getTimeline(tenantId: string, patientId: string, userId?: string, userRole?: string) {
+  const history = await getHistory(tenantId, patientId, userId, userRole);
+  return history.timeline;
 }

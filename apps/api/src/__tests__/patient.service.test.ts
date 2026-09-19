@@ -33,6 +33,21 @@ vi.mock('@physiocore/db', () => ({
     clientTask: {
       findMany: vi.fn(),
     },
+    schemeClaim: {
+      findMany: vi.fn(),
+    },
+    followUp: {
+      findMany: vi.fn(),
+    },
+    reminderLog: {
+      findMany: vi.fn(),
+    },
+    patientFeedback: {
+      findMany: vi.fn(),
+    },
+    drugStockMovement: {
+      findMany: vi.fn(),
+    },
   },
   Role: {
     SUPER_ADMIN: 'SUPER_ADMIN',
@@ -77,6 +92,11 @@ describe('patient.service', () => {
     vi.mocked(prisma.outcomeMeasure.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.clientTask.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.schemeClaim.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.followUp.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.reminderLog.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.patientFeedback.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.drugStockMovement.findMany).mockResolvedValue([] as any);
   });
 
   describe('list', () => {
@@ -369,6 +389,32 @@ describe('patient.service', () => {
         'soap_note',
         'appointment',
       ]);
+    });
+  });
+
+  describe('getHistory', () => {
+    it('includes medication issues in the patient summary and timeline', async () => {
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue(mockPatient as any);
+      vi.mocked(prisma.drugStockMovement.findMany).mockResolvedValue([
+        {
+          id: 'issue-1',
+          type: 'ISSUE',
+          quantity: 2,
+          createdAt: new Date('2024-06-07'),
+          drugInventory: { name: 'Ibuprofen', unit: 'tablet' },
+          recordedBy: { firstName: 'Front', lastName: 'Desk' },
+        },
+      ] as any);
+
+      const result = await patientService.getHistory(tenantId, 'patient-1');
+
+      expect(result.summary.medicationIssues).toBe(1);
+      expect(result.timeline[0]).toEqual(expect.objectContaining({
+        type: 'drug_issue',
+        title: 'Medication issued',
+        summary: 'Ibuprofen x2 tablet',
+        actor: 'Front Desk',
+      }));
     });
   });
 });

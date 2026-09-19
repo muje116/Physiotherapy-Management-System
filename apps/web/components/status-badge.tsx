@@ -19,6 +19,13 @@ const STATUS_COLORS: Record<string, 'success' | 'warning' | 'info' | 'destructiv
   DRAFT: 'secondary',
   SIGNED: 'success',
   UNSIGNED: 'warning',
+  AVAILABLE: 'success',
+  LOW_STOCK: 'warning',
+  EXPIRED: 'destructive',
+  IN_SERVICE: 'success',
+  MAINTENANCE: 'warning',
+  RETIRED: 'neutral',
+  LOST: 'destructive',
 };
 
 interface StatusBadgeProps {

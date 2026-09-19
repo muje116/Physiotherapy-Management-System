@@ -112,7 +112,7 @@ interface PatientDetail {
     percentage: number;
     notes: string;
   }>;
-  timeline: Array<{ date: string; time: string; event: string; type: string }>;
+  timeline: Array<{ date: string; time: string; event: string; title: string; summary: string; actor: string; type: string }>;
 }
 
 function formatDate(value: string | Date | null | undefined) {
@@ -299,6 +299,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             date: formatDate(item.date),
             time: formatTime(item.date),
             event: String(item.type || 'event').replace(/_/g, ' '),
+            title: item.title || String(item.type || 'event').replace(/_/g, ' '),
+            summary: item.summary || '',
+            actor: item.actor || '',
             type: item.type,
           })),
           treatmentPlans: (treatmentPlansRes.data.data || []).map((plan: any) => ({
@@ -501,7 +504,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
           <TabsTrigger value="exercises">Exercise Plans</TabsTrigger>
           <TabsTrigger value="outcomes">Outcome Measures</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+           <TabsTrigger value="timeline">Full History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -762,7 +765,11 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
         <TabsContent value="timeline">
           <Card>
-            <CardContent className="p-6">
+            <CardHeader>
+              <CardTitle className="text-base">Complete patient history</CardTitle>
+              <CardDescription>Clinical, treatment, appointment, financial, communication, outcome, and medication events in reverse chronological order.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
               <div className="space-y-4">
                 {patient.timeline.map((item, idx) => (
                   <div key={`${item.type}-${idx}`} className="flex gap-4">
@@ -775,7 +782,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                         <span className="font-medium">{item.date}</span>
                         <span className="text-muted-foreground">{item.time}</span>
                       </div>
-                      <p className="mt-1 text-sm capitalize">{item.event}</p>
+                      <p className="mt-1 text-sm font-medium capitalize">{item.title || item.event}</p>
+                      {item.summary && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{item.summary}</p>}
+                      {item.actor && <p className="mt-1 text-xs text-muted-foreground">Recorded by {item.actor}</p>}
                     </div>
                   </div>
                 ))}

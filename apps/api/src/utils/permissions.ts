@@ -39,6 +39,9 @@ export const PERMISSIONS = {
   'client_task:read': [Role.SUPER_ADMIN, Role.ADMIN, Role.THERAPIST],
   'client_task:create': [Role.SUPER_ADMIN, Role.ADMIN, Role.THERAPIST],
   'client_task:update': [Role.SUPER_ADMIN, Role.ADMIN, Role.THERAPIST],
+  'inventory:read': [Role.SUPER_ADMIN, Role.ADMIN, Role.THERAPIST, Role.FRONT_DESK, Role.BILLING],
+  'inventory:write': [Role.SUPER_ADMIN, Role.ADMIN, Role.FRONT_DESK],
+  'inventory:issue': [Role.SUPER_ADMIN, Role.ADMIN, Role.THERAPIST, Role.FRONT_DESK],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

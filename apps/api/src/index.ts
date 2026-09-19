@@ -28,6 +28,7 @@ import medicalSchemeRoutes from './routes/medical-scheme.routes';
 import treatmentPlanRoutes from './routes/treatment-plan.routes';
 import clientTaskRoutes from './routes/client-task.routes';
 import outcomeMeasureRoutes from './routes/outcome-measure.routes';
+import inventoryRoutes from './routes/inventory.routes';
 import { setupRequestId } from './middleware/request-id';
 import { setupErrorTracking } from './middleware/error-tracker';
 import { setupPerformanceMonitoring } from './middleware/performance';
@@ -170,6 +171,7 @@ async function buildApp() {
   await app.register(treatmentPlanRoutes, { prefix: '/api/v1' });
   await app.register(clientTaskRoutes, { prefix: '/api/v1' });
   await app.register(outcomeMeasureRoutes, { prefix: '/api/v1' });
+  await app.register(inventoryRoutes, { prefix: '/api/v1' });
 
   return app;
 }

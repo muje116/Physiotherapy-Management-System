@@ -18,6 +18,11 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
+  employeeNumber?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  phone?: string | null;
+  hireDate?: string | null;
   role: string;
   isActive: boolean;
 }
@@ -44,6 +49,11 @@ export default function UsersPage() {
   const [formPassword, setFormPassword] = useState('');
   const [formFirstName, setFormFirstName] = useState('');
   const [formLastName, setFormLastName] = useState('');
+  const [formEmployeeNumber, setFormEmployeeNumber] = useState('');
+  const [formJobTitle, setFormJobTitle] = useState('');
+  const [formDepartment, setFormDepartment] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formHireDate, setFormHireDate] = useState('');
   const [formRole, setFormRole] = useState('THERAPIST');
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,6 +77,11 @@ export default function UsersPage() {
     setFormPassword('');
     setFormFirstName('');
     setFormLastName('');
+    setFormEmployeeNumber('');
+    setFormJobTitle('');
+    setFormDepartment('');
+    setFormPhone('');
+    setFormHireDate('');
     setFormRole('THERAPIST');
     setFormActive(true);
   };
@@ -82,6 +97,11 @@ export default function UsersPage() {
     setFormPassword('');
     setFormFirstName(user.firstName);
     setFormLastName(user.lastName);
+    setFormEmployeeNumber(user.employeeNumber || '');
+    setFormJobTitle(user.jobTitle || '');
+    setFormDepartment(user.department || '');
+    setFormPhone(user.phone || '');
+    setFormHireDate(user.hireDate ? new Date(user.hireDate).toISOString().slice(0, 10) : '');
     setFormRole(user.role);
     setFormActive(user.isActive);
     setDialogOpen(true);
@@ -96,17 +116,30 @@ export default function UsersPage() {
         await api.patch(`/users/${editingUser.id}`, {
           firstName: formFirstName,
           lastName: formLastName,
+          employeeNumber: formEmployeeNumber || null,
+          jobTitle: formJobTitle || null,
+          department: formDepartment || null,
+          phone: formPhone || null,
+          hireDate: formHireDate ? new Date(`${formHireDate}T00:00:00`).toISOString() : null,
           role: formRole,
           isActive: formActive,
         });
       } else {
-        await api.post('/users', {
+        const userResponse = await api.post('/users', {
           email: formEmail,
           password: formPassword,
           firstName: formFirstName,
           lastName: formLastName,
+          employeeNumber: formEmployeeNumber || undefined,
+          jobTitle: formJobTitle || undefined,
+          department: formDepartment || undefined,
+          phone: formPhone || undefined,
+          hireDate: formHireDate ? new Date(`${formHireDate}T00:00:00`).toISOString() : undefined,
           role: formRole,
         });
+        if (formRole === 'THERAPIST') {
+          await api.post('/therapists', { userId: userResponse.data.data.id });
+        }
       }
 
       setDialogOpen(false);
@@ -160,18 +193,18 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage system users and permissions</p>
+          <h1 className="text-2xl font-bold tracking-tight">Hospital Employees</h1>
+          <p className="text-muted-foreground">Manage physiotherapists, administrators, front desk, and billing staff</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openNewUser}>
-              <Plus className="mr-2 h-4 w-4" /> Invite User
+              <Plus className="mr-2 h-4 w-4" /> Add Employee
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingUser ? 'Edit User' : 'Invite User'}</DialogTitle>
+              <DialogTitle>{editingUser ? 'Edit Employee' : 'Add Employee'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -183,6 +216,13 @@ export default function UsersPage() {
                   <Label>Last Name</Label>
                   <Input value={formLastName} onChange={(e) => setFormLastName(e.target.value)} />
                 </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2"><Label>Employee Number</Label><Input value={formEmployeeNumber} onChange={(e) => setFormEmployeeNumber(e.target.value)} placeholder="Optional" /></div>
+                <div className="space-y-2"><Label>Job Title</Label><Input value={formJobTitle} onChange={(e) => setFormJobTitle(e.target.value)} placeholder="e.g. Senior Physiotherapist" /></div>
+                <div className="space-y-2"><Label>Department</Label><Input value={formDepartment} onChange={(e) => setFormDepartment(e.target.value)} placeholder="Clinical, Billing, Front Desk" /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Hire Date</Label><Input type="date" value={formHireDate} onChange={(e) => setFormHireDate(e.target.value)} /></div>
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -248,9 +288,10 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
+               <TableHead>Employee</TableHead>
+               <TableHead>Email</TableHead>
+               <TableHead>Department</TableHead>
+               <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -265,6 +306,7 @@ export default function UsersPage() {
                     </div>
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
+                  <TableCell><div>{user.department || '-'}</div><div className="text-xs text-muted-foreground">{user.jobTitle || user.employeeNumber || ''}</div></TableCell>
                   <TableCell>{user.role}</TableCell>
                   <TableCell><StatusBadge status={user.isActive ? 'ACTIVE' : 'INACTIVE'} /></TableCell>
                   <TableCell className="text-right">
@@ -286,7 +328,7 @@ export default function UsersPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No users found</TableCell>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No employees found</TableCell>
                 </TableRow>
               )}
             </TableBody>

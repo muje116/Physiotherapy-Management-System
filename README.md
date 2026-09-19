@@ -120,6 +120,7 @@ All routes under `/api/v1`. Global response format:
 | GET | /patients/:id/exercise-plans | patient:read |
 | GET | /patients/:id/outcome-measures | patient:read |
 | GET | /patients/:id/timeline | patient:read |
+| GET | /patients/:id/history | patient:read |
 
 ### Appointments
 | Method | Path | Permissions |
@@ -185,6 +186,24 @@ Medical-aid claims are submitted and tracked in the Medical Schemes area. The wo
 | POST | /payments/methods | payment:create |
 | PATCH | /payments/methods/:id | payment:create |
 | DELETE | /payments/methods/:id | payment:create |
+
+### Inventory & Assets
+| Method | Path | Permissions |
+|---|---|---|
+| GET | /inventory/summary | inventory:read |
+| GET | /inventory/assets | inventory:read |
+| POST | /inventory/assets | inventory:write |
+| PATCH | /inventory/assets/:assetId | inventory:write |
+| DELETE | /inventory/assets/:assetId | inventory:write |
+| GET | /inventory/drugs | inventory:read |
+| POST | /inventory/drugs | inventory:write |
+| PATCH | /inventory/drugs/:drugId | inventory:write |
+| POST | /inventory/drugs/:drugId/receive | inventory:write |
+| POST | /inventory/drugs/:drugId/issue | inventory:issue |
+| POST | /inventory/drugs/:drugId/adjust | inventory:write |
+| GET | /inventory/drugs/:drugId/movements | inventory:read |
+
+Drug issues are recorded against either a patient or an active employee. Stock is decremented transactionally and cannot fall below zero; every receipt, issue, and adjustment remains in the movement ledger.
 
 ### Exercise Plans
 | Method | Path | Permissions |

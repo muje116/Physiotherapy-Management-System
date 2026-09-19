@@ -23,6 +23,7 @@ import {
   Building2,
   ClipboardList,
   CheckSquare,
+  Package,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -44,9 +45,10 @@ const navItems = [
   { href: '/medical-schemes', label: 'Medical Schemes', icon: Building2 },
   { href: '/treatment-plans', label: 'Treatment Plans', icon: ClipboardList },
   { href: '/client-tasks', label: 'Client Tasks', icon: CheckSquare },
+  { href: '/inventory', label: 'Inventory & Assets', icon: Package },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
-  { href: '/users', label: 'Users', icon: Users },
+  { href: '/users', label: 'Hospital Employees', icon: Users },
   { href: '/reminders', label: 'Reminders', icon: Bell },
 ];
 

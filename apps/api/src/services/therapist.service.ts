@@ -6,7 +6,7 @@ export async function list(tenantId: string) {
   const therapists = await prisma.therapist.findMany({
     where: { tenantId },
     include: {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true, isActive: true } },
+      user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, jobTitle: true, department: true, role: true, isActive: true } },
       _count: { select: { appointments: true, patients: true } },
     },
   });
@@ -40,7 +40,7 @@ export async function create(tenantId: string, data: { userId: string; registrat
       avatarUrl: data.avatarUrl,
     },
     include: {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+      user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, jobTitle: true, department: true, role: true } },
     },
   });
 
@@ -51,7 +51,7 @@ export async function getById(tenantId: string, therapistId: string) {
   const therapist = await prisma.therapist.findFirst({
     where: { id: therapistId, tenantId },
     include: {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true, isActive: true } },
+      user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, jobTitle: true, department: true, role: true, isActive: true } },
       scheduleBlocks: { orderBy: { startAt: 'asc' } },
       _count: { select: { patients: true, appointments: true } },
     },
@@ -75,7 +75,7 @@ export async function update(tenantId: string, therapistId: string, data: any) {
   return prisma.therapist.update({
     where: { id: therapistId },
     data: updateData,
-    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, jobTitle: true, department: true } } },
   });
 }
 
