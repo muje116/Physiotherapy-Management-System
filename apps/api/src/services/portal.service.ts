@@ -1,6 +1,7 @@
 import { prisma, AppointmentStatus } from '@physiocore/db';
 import { NotFoundError, ForbiddenError } from '../utils/errors';
 import { recordPayment } from './payment.service';
+import { listPatientPaymentRequests } from './payment-request.service';
 
 export async function getProfile(userId: string) {
   const patient = await prisma.patient.findUnique({
@@ -54,6 +55,10 @@ export async function getInvoices(patientId: string) {
     where: { patientId },
     orderBy: { createdAt: 'desc' },
   });
+}
+
+export async function getPaymentRequests(patientId: string) {
+  return listPatientPaymentRequests(patientId);
 }
 
 export async function getExercisePlans(patientId: string) {

@@ -9,6 +9,7 @@ const PUBLIC_ROUTES = [
   'POST /api/v1/auth/login',
   'POST /api/v1/auth/forgot-password',
   'POST /api/v1/auth/reset-password',
+  'POST /api/v1/payments/onekhusa/webhook',
   'GET /docs',
 ];
 

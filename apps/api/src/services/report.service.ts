@@ -12,6 +12,10 @@ type PaymentReportOptions = {
   status?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
 };
 
+type MedicalSchemePaymentReportOptions = {
+  schemeId?: string;
+};
+
 function toReportDates(dateRange: ReportDateRange) {
   return { start: new Date(dateRange.startDate), end: new Date(dateRange.endDate) };
 }
@@ -617,5 +621,120 @@ export async function getPaymentReport(
     byMethod,
     monthlyTrend: Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month)),
     payments: paymentRows,
+  };
+}
+
+/**
+ * Lists completed collections made through a medical scheme and groups the
+ * result by the scheme recorded on the related claim. Patients with a scheme
+ * payment but no linked claim remain visible under the unlinked group so the
+ * report can also identify records that need reconciliation.
+ */
+export async function getMedicalSchemePaymentReport(
+  tenantId: string,
+  dateRange: ReportDateRange,
+  options: MedicalSchemePaymentReportOptions = {},
+) {
+  const { start, end } = toReportDates(dateRange);
+  const where: any = {
+    tenantId,
+    status: 'COMPLETED',
+    paidAt: { gte: start, lte: end },
+    OR: [
+      { methodName: { contains: 'MEDICAL', mode: 'insensitive' } },
+      { paymentMethod: { is: { type: { contains: 'MEDICAL', mode: 'insensitive' } } } },
+      { invoice: { schemeClaims: { some: {} } } },
+    ],
+  };
+
+  if (options.schemeId) {
+    where.invoice = { schemeClaims: { some: { schemeId: options.schemeId } } };
+  }
+
+  const payments = await prisma.payment.findMany({
+    where,
+    orderBy: { paidAt: 'desc' },
+    include: {
+      patient: { select: { id: true, patientCode: true, firstName: true, lastName: true, medicalAidName: true, medicalAidNo: true } },
+      invoice: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          schemeClaims: {
+            where: options.schemeId ? { schemeId: options.schemeId } : undefined,
+            include: { scheme: { select: { id: true, name: true, code: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      },
+      paymentMethod: { select: { name: true, type: true } },
+    },
+  });
+
+  const rows = payments
+    .filter((payment: any) => {
+      const method = `${payment.methodName || ''} ${payment.paymentMethod?.type || ''}`.toLowerCase();
+      return method.includes('medical') || Boolean(payment.invoice?.schemeClaims?.length);
+    })
+    .map((payment: any) => {
+      const claim = payment.invoice?.schemeClaims?.[0];
+      const scheme = claim?.scheme;
+      const schemeName = scheme?.name || payment.patient?.medicalAidName || 'Medical scheme not linked';
+      return {
+        id: payment.id,
+        paidAt: payment.paidAt,
+        patientId: payment.patientId,
+        patientCode: payment.patient?.patientCode || null,
+        patientName: payment.patient ? `${payment.patient.firstName} ${payment.patient.lastName}` : payment.patientId,
+        medicalAidNumber: payment.patient?.medicalAidNo || null,
+        schemeId: scheme?.id || null,
+        scheme: schemeName,
+        schemeCode: scheme?.code || null,
+        claimReference: claim?.claimReference || null,
+        claimStatus: claim?.status || null,
+        invoiceNumber: payment.invoice?.invoiceNumber || null,
+        amount: roundMoney(toAmount(payment.amount)),
+        method: methodLabel(payment.paymentMethod?.name || payment.methodName),
+        reference: payment.reference || null,
+      };
+    });
+
+  const groups = new Map<string, {
+    schemeId: string | null;
+    scheme: string;
+    schemeCode: string | null;
+    patientIds: Set<string>;
+    transactionCount: number;
+    collectedAmount: number;
+  }>();
+
+  for (const row of rows) {
+    const key = row.schemeId || `name:${row.scheme}`;
+    const group = groups.get(key) || {
+      schemeId: row.schemeId,
+      scheme: row.scheme,
+      schemeCode: row.schemeCode,
+      patientIds: new Set<string>(),
+      transactionCount: 0,
+      collectedAmount: 0,
+    };
+    group.patientIds.add(row.patientId);
+    group.transactionCount += 1;
+    group.collectedAmount = roundMoney(group.collectedAmount + row.amount);
+    groups.set(key, group);
+  }
+
+  return {
+    summary: {
+      transactionCount: rows.length,
+      patientCount: new Set(rows.map((row) => row.patientId)).size,
+      schemeCount: groups.size,
+      collectedAmount: sumAmounts(rows, (row) => row.amount),
+    },
+    byScheme: Array.from(groups.values())
+      .map(({ patientIds, ...group }) => ({ ...group, patientCount: patientIds.size }))
+      .sort((a, b) => b.collectedAmount - a.collectedAmount || a.scheme.localeCompare(b.scheme)),
+    patients: rows,
   };
 }

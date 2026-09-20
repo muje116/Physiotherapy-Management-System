@@ -7,3 +7,4 @@ export const reminderQueue = new Queue('reminders', { connection: redisConnectio
 export const invoiceQueue = new Queue('invoices', { connection: redisConnection });
 export const reportQueue = new Queue('reports', { connection: redisConnection });
 export const medicalAidQueue = new Queue('medical-aid', { connection: redisConnection });
+export const paymentRequestQueue = new Queue('payment-requests', { connection: redisConnection });

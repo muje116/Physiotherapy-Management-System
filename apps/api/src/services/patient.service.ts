@@ -223,7 +223,7 @@ export async function getOutcomeMeasures(tenantId: string, patientId: string, us
 export async function getHistory(tenantId: string, patientId: string, userId?: string, userRole?: string) {
   await verifyPatientAccess(tenantId, patientId, userId, userRole);
 
-  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, clientTasks, schemeClaims, followUps, reminderLogs, feedback, drugIssues] = await Promise.all([
+  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, paymentRequests, clientTasks, schemeClaims, followUps, reminderLogs, feedback, drugIssues] = await Promise.all([
     prisma.appointment.findMany({
       where: { patientId, tenantId },
       include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } },
@@ -239,6 +239,7 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
     prisma.treatmentPlan.findMany({ where: { patientId, tenantId }, include: { stages: { orderBy: { order: 'asc' } } }, orderBy: { createdAt: 'desc' } }),
     prisma.outcomeMeasure.findMany({ where: { patientId, tenantId }, orderBy: { recordedAt: 'desc' } }),
     prisma.payment.findMany({ where: { patientId, tenantId }, include: { paymentMethod: true }, orderBy: { paidAt: 'desc' } }),
+    prisma.paymentRequest.findMany({ where: { patientId, tenantId }, include: { invoice: true }, orderBy: { createdAt: 'desc' } }),
     prisma.clientTask.findMany({ where: { patientId, tenantId }, include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } }, orderBy: { createdAt: 'desc' } }),
     prisma.schemeClaim.findMany({ where: { patientId, tenantId }, include: { scheme: true }, orderBy: { createdAt: 'desc' } }),
     prisma.followUp.findMany({ where: { patientId, tenantId }, include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } }, orderBy: { createdAt: 'desc' } }),
@@ -287,6 +288,10 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
     'payment', payment.paidAt || payment.createdAt, 'Payment',
     `${payment.amount} via ${payment.methodName} - ${payment.status}`, payment,
   ));
+  paymentRequests.forEach((paymentRequest: any) => add(
+    'payment_request', paymentRequest.createdAt, 'Payment request',
+    `${paymentRequest.provider} - ${paymentRequest.status} - ${paymentRequest.amount}`, paymentRequest,
+  ));
   clientTasks.forEach((task: any) => add(
     'client_task', task.createdAt, 'Patient task',
     `${task.title} - ${task.status}`, task, therapistName(task.therapist),
@@ -332,6 +337,7 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
       outcomeMeasures: outcomeMeasures.length,
       invoices: invoices.length,
       payments: payments.length,
+      paymentRequests: paymentRequests.length,
       medicationIssues: drugIssues.length,
       tasks: clientTasks.length,
       totalInvoiced,
@@ -346,6 +352,7 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
       treatmentPlans,
       outcomeMeasures,
       payments,
+      paymentRequests,
       clientTasks,
       schemeClaims,
       followUps,

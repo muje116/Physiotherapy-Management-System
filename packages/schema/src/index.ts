@@ -5,6 +5,7 @@ export * from './soap-note';
 export * from './therapist';
 export * from './invoice';
 export * from './payment';
+export * from './payment-request';
 export * from './exercise-plan';
 export * from './reminder';
 export * from './marketing';

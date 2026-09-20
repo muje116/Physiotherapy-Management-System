@@ -9,6 +9,7 @@ const reportQueryBaseSchema = z.object({
   status: reportPaymentStatusSchema.optional(),
   paymentMethod: z.string().trim().min(1).optional(),
   memberStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  schemeId: recordIdSchema.optional(),
 });
 
 export const reportQuerySchema = reportQueryBaseSchema.refine((value) => new Date(value.startDate) <= new Date(value.endDate), {
@@ -19,7 +20,7 @@ export const reportQuerySchema = reportQueryBaseSchema.refine((value) => new Dat
 export const reportDashboardQuerySchema = reportQueryBaseSchema.partial();
 
 export const exportReportSchema = z.object({
-  type: z.enum(['clinical', 'financial', 'operational', 'therapist', 'patients', 'members', 'payments']),
+  type: z.enum(['clinical', 'financial', 'operational', 'therapist', 'patients', 'members', 'payments', 'medical-scheme-payments']),
   format: z.enum(['pdf', 'csv']),
   therapistId: recordIdSchema.optional(),
   dateRange: z.object({

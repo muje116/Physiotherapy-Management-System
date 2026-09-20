@@ -75,6 +75,7 @@ export async function recordPayment(tenantId: string, data: any) {
         reference: data.reference || null,
         status: 'COMPLETED',
         notes: data.notes || null,
+        paymentRequestId: data.paymentRequestId || null,
       },
     });
 

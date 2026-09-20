@@ -128,6 +128,26 @@ interface PaymentReport {
   }[];
 }
 
+interface MedicalSchemePaymentReport {
+  summary: { transactionCount: number; patientCount: number; schemeCount: number; collectedAmount: number };
+  byScheme: { schemeId: string | null; scheme: string; schemeCode: string | null; patientCount: number; transactionCount: number; collectedAmount: number }[];
+  patients: {
+    id: string;
+    paidAt: string;
+    patientCode: string | null;
+    patientName: string;
+    medicalAidNumber: string | null;
+    scheme: string;
+    schemeCode: string | null;
+    claimReference: string | null;
+    claimStatus: string | null;
+    invoiceNumber: string | null;
+    amount: number;
+    method: string;
+    reference: string | null;
+  }[];
+}
+
 interface QueuedExport {
   id: string;
   type: string;
@@ -164,6 +184,7 @@ const MEMBER_STATUS_OPTIONS = [
 const SERVER_EXPORT_TYPE_OPTIONS = [
   { value: 'members', label: 'Members' },
   { value: 'payments', label: 'Payments' },
+  { value: 'medical-scheme-payments', label: 'Medical scheme collections' },
   { value: 'financial', label: 'Financial' },
   { value: 'clinical', label: 'Clinical' },
   { value: 'operational', label: 'Operational' },
@@ -241,6 +262,7 @@ export default function ReportsPage() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [memberReport, setMemberReport] = useState<MemberReport | null>(null);
   const [paymentReport, setPaymentReport] = useState<PaymentReport | null>(null);
+  const [medicalSchemeReport, setMedicalSchemeReport] = useState<MedicalSchemePaymentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [serverExportType, setServerExportType] = useState('members');
@@ -262,15 +284,17 @@ export default function ReportsPage() {
       const baseQuery = reportQuery(filters);
       const memberQuery = reportQuery(filters, { paymentMethod: memberMethod, memberStatus });
       const paymentQuery = reportQuery(filters, { paymentMethod, status: paymentStatus });
-      const [dashboardResponse, memberResponse, paymentResponse] = await Promise.all([
+      const [dashboardResponse, memberResponse, paymentResponse, medicalSchemeResponse] = await Promise.all([
         api.get(`/reports?${baseQuery}`),
         api.get(`/reports/patients?${memberQuery}`),
         api.get(`/reports/payments?${paymentQuery}`),
+        api.get(`/reports/medical-scheme-payments?${baseQuery}`),
       ]);
 
       setDashboard(dashboardResponse.data.data);
       setMemberReport(memberResponse.data.data);
       setPaymentReport(paymentResponse.data.data);
+      setMedicalSchemeReport(medicalSchemeResponse.data.data);
     } catch (err: any) {
       setError(err.response?.data?.error?.message || err.message || 'Unable to load reports');
     } finally {
@@ -346,7 +370,7 @@ export default function ReportsPage() {
   };
 
   const exportCsv = () => {
-    if (!dashboard || !memberReport || !paymentReport) return;
+    if (!dashboard || !memberReport || !paymentReport || !medicalSchemeReport) return;
 
     const rows: unknown[][] = [
       ['PhysioCore report export'],
@@ -447,6 +471,21 @@ export default function ReportsPage() {
         row.notes || '',
       ]),
       [],
+      ['Medical scheme collections'],
+      ['Scheme', 'Scheme code', 'Patient code', 'Patient', 'Medical aid number', 'Invoice', 'Date', 'Amount', 'Method', 'Reference'],
+      ...medicalSchemeReport.patients.map((row) => [
+        row.scheme,
+        row.schemeCode || '',
+        row.patientCode || '',
+        row.patientName,
+        row.medicalAidNumber || '',
+        row.invoiceNumber || '',
+        formatDateTime(row.paidAt),
+        row.amount,
+        row.method,
+        row.reference || '',
+      ]),
+      [],
       ['Dashboard financial summary'],
       ['Collection rate', `${dashboard.collectionRate}%`],
       ['Average days to pay', dashboard.avgDaysToPay],
@@ -479,7 +518,7 @@ export default function ReportsPage() {
     );
   }
 
-  if (!dashboard || !memberReport || !paymentReport) {
+  if (!dashboard || !memberReport || !paymentReport || !medicalSchemeReport) {
     return <div className="space-y-4"><p className="text-destructive">{error || 'Reports are unavailable.'}</p><Button onClick={() => void loadReports()}>Retry</Button></div>;
   }
 
@@ -563,6 +602,7 @@ export default function ReportsPage() {
         <TabsList className="flex h-auto w-full justify-start overflow-x-auto print:hidden">
           <TabsTrigger value="members"><Users className="mr-2 h-4 w-4" /> Members</TabsTrigger>
           <TabsTrigger value="payments"><Wallet className="mr-2 h-4 w-4" /> Payments</TabsTrigger>
+          <TabsTrigger value="medical-schemes"><CreditCard className="mr-2 h-4 w-4" /> Medical schemes</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="clinical">Clinical</TabsTrigger>
           <TabsTrigger value="operational">Operational</TabsTrigger>
@@ -724,6 +764,39 @@ export default function ReportsPage() {
                     </TableRow>
                   ))}
                   {paymentReport.payments.length === 0 && <EmptyRow colSpan={7} label="No payments match the selected filters" />}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="medical-schemes" className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Collected" value={formatMoney(medicalSchemeReport.summary.collectedAmount)} subtitle={`${medicalSchemeReport.summary.transactionCount} completed transactions`} icon={Wallet} />
+            <StatCard title="Patients" value={String(medicalSchemeReport.summary.patientCount)} subtitle="paid through a medical scheme" icon={Users} />
+            <StatCard title="Schemes" value={String(medicalSchemeReport.summary.schemeCount)} subtitle="grouped in this period" icon={CreditCard} />
+            <StatCard title="Period" value={filters.from} subtitle={`to ${filters.to}`} icon={Activity} />
+          </div>
+          <Card>
+            <CardHeader><CardTitle className="text-base">Collections by scheme</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Scheme</TableHead><TableHead>Code</TableHead><TableHead>Patients</TableHead><TableHead>Transactions</TableHead><TableHead>Collected</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {medicalSchemeReport.byScheme.map((row) => <TableRow key={`${row.schemeId || 'unlinked'}-${row.scheme}`}><TableCell className="font-medium">{row.scheme}</TableCell><TableCell>{row.schemeCode || '-'}</TableCell><TableCell>{row.patientCount}</TableCell><TableCell>{row.transactionCount}</TableCell><TableCell>{formatMoney(row.collectedAmount)}</TableCell></TableRow>)}
+                  {medicalSchemeReport.byScheme.length === 0 && <EmptyRow colSpan={5} label="No medical scheme collections in this period" />}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between"><CardTitle className="text-base">Patients who paid by medical scheme</CardTitle><span className="text-sm text-muted-foreground">{medicalSchemeReport.patients.length} transactions</span></CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Scheme</TableHead><TableHead>Patient</TableHead><TableHead>Medical aid number</TableHead><TableHead>Invoice</TableHead><TableHead>Amount</TableHead><TableHead>Claim</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {medicalSchemeReport.patients.map((row) => <TableRow key={row.id}><TableCell>{formatDateTime(row.paidAt)}</TableCell><TableCell><div className="font-medium">{row.scheme}</div><div className="text-xs text-muted-foreground">{row.schemeCode || 'Not linked'}</div></TableCell><TableCell><div className="font-medium">{row.patientName}</div><div className="text-xs text-muted-foreground">{row.patientCode || row.patientName}</div></TableCell><TableCell>{row.medicalAidNumber || '-'}</TableCell><TableCell>{row.invoiceNumber || '-'}</TableCell><TableCell>{formatMoney(row.amount)}</TableCell><TableCell>{row.claimReference || row.claimStatus || '-'}</TableCell><TableCell>{row.reference || '-'}</TableCell></TableRow>)}
+                  {medicalSchemeReport.patients.length === 0 && <EmptyRow colSpan={8} label="No medical scheme patients in this period" />}
                 </TableBody>
               </Table>
             </CardContent>

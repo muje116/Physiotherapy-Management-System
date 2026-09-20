@@ -46,6 +46,20 @@ async function buildApp() {
     },
   });
 
+  // Preserve the exact JSON bytes so OneKhusa HMAC signatures can be verified
+  // before the webhook payload is parsed and reconciled.
+  app.decorateRequest('rawBody', null);
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    const rawBody = typeof body === 'string' ? body : body.toString('utf8');
+    request.rawBody = rawBody;
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   await app.register(cors, {
     origin: FRONTEND_URL,
     credentials: true,

@@ -182,10 +182,24 @@ Medical-aid claims are submitted and tracked in the Medical Schemes area. The wo
 | GET | /payments | payment:read |
 | POST | /payments | payment:create |
 | GET | /payments/summary | payment:read |
+| GET | /payments/requests | payment:read |
+| POST | /payments/requests | payment:create |
+| GET | /payments/requests/:id | payment:read |
+| POST | /payments/requests/:id/poll | payment:read |
+| POST | /payments/onekhusa/webhook | Public signed callback |
 | GET | /payments/methods | payment:read |
 | POST | /payments/methods | payment:create |
 | PATCH | /payments/methods/:id | payment:create |
 | DELETE | /payments/methods/:id | payment:create |
+
+OneKhusa request-to-pay uses the `@chiahq/sdk` package. Configure the `ONEKHUSA_*`
+values in `.env`, run the payment-request migration, and register
+`POST /api/v1/payments/onekhusa/webhook` with OneKhusa. Staff can create a request
+from an outstanding invoice; the member sees the timed account number and reference
+in the portal, and configured email/SMS channels receive the same payment details.
+Webhook confirmation is authoritative, while the worker polls pending requests every
+30 seconds as a reconciliation fallback. Confirmed payments are linked to the
+invoice and automatically update its balance/status.
 
 ### Inventory & Assets
 | Method | Path | Permissions |
@@ -255,6 +269,7 @@ Drug issues are recorded against either a patient or an active employee. Stock i
 | GET | /reports/patients | finance:read |
 | GET | /reports/members | finance:read |
 | GET | /reports/payments | finance:read |
+| GET | /reports/medical-scheme-payments | finance:read |
 | GET | /reports/clinical | finance:read |
 | GET | /reports/financial | finance:read |
 | GET | /reports/operational | finance:read |
@@ -263,7 +278,7 @@ Drug issues are recorded against either a patient or an active employee. Stock i
 | GET | /reports/exports/:exportId | finance:read |
 | GET | /reports/exports/:exportId/download | finance:export |
 
-Report detail endpoints accept ISO `startDate` and `endDate` query parameters. `/reports/patients` also accepts `memberStatus` and preferred `paymentMethod`; `/reports/payments` accepts recorded `paymentMethod` and payment `status`.
+Report detail endpoints accept ISO `startDate` and `endDate` query parameters. `/reports/patients` also accepts `memberStatus` and preferred `paymentMethod`; `/reports/payments` accepts recorded `paymentMethod` and payment `status`; `/reports/medical-scheme-payments` groups completed scheme collections by linked scheme and accepts an optional `schemeId`.
 
 ### Settings
 | Method | Path | Permissions |
@@ -296,6 +311,7 @@ Report detail endpoints accept ISO `startDate` and `endDate` query parameters. `
 | invoices | flag-overdue-invoices | Daily cron |
 | reports | export-report | POST /reports/export |
 | medical-aid | poll-claim-status | Daily cron |
+| payment-requests | poll-payment-requests | Every 30 seconds (webhook reconciliation fallback) |
 
 ## Testing
 

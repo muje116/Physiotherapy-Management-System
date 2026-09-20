@@ -30,6 +30,9 @@ vi.mock('@physiocore/db', () => ({
     payment: {
       findMany: vi.fn(),
     },
+    paymentRequest: {
+      findMany: vi.fn(),
+    },
     clientTask: {
       findMany: vi.fn(),
     },
@@ -91,6 +94,7 @@ describe('patient.service', () => {
     vi.mocked(prisma.treatmentPlan.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.outcomeMeasure.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.paymentRequest.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.clientTask.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.schemeClaim.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.followUp.findMany).mockResolvedValue([] as any);

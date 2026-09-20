@@ -36,13 +36,17 @@ async function main() {
   await import('./jobs/invoice.jobs');
   await import('./jobs/report.jobs');
   await import('./jobs/medical-aid.jobs');
-  const { reminderQueue, invoiceQueue, medicalAidQueue } = await import('./queues');
+  await import('./jobs/payment-request.jobs');
+  const { reminderQueue, invoiceQueue, medicalAidQueue, paymentRequestQueue } = await import('./queues');
 
   // Register repeatable jobs
   await reminderQueue.upsertJobScheduler('send-appointment-reminder', { every: 15 * 60 * 1000 }, { name: 'send-appointment-reminder' });
   await reminderQueue.upsertJobScheduler('reengagement', { every: 24 * 60 * 60 * 1000 }, { name: 'reengagement' });
   await invoiceQueue.upsertJobScheduler('flag-overdue-invoices', { every: 24 * 60 * 60 * 1000 }, { name: 'flag-overdue-invoices' });
   await medicalAidQueue.upsertJobScheduler('poll-claim-status', { every: 24 * 60 * 60 * 1000 }, { name: 'poll-claim-status' });
+  // Webhooks are authoritative; this low-frequency inquiry reconciles a
+  // pending request when a webhook is delayed or unavailable.
+  await paymentRequestQueue.upsertJobScheduler('poll-payment-requests', { every: 30 * 1000 }, { name: 'poll-payment-requests' });
 
   console.log('All workers registered');
 }

@@ -6,5 +6,6 @@ declare module 'fastify' {
     user: AuthenticatedUser;
     tenantId: string;
     tenant: any;
+    rawBody?: string;
   }
 }

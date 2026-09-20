@@ -185,4 +185,68 @@ describe('report.service', () => {
       }));
     });
   });
+
+  describe('getMedicalSchemePaymentReport', () => {
+    it('groups completed medical scheme collections by scheme and keeps unlinked patients visible', async () => {
+      vi.mocked(prisma.payment.findMany).mockResolvedValue([
+        {
+          id: 'payment-scheme-1',
+          patientId: 'patient-1',
+          amount: 800,
+          methodName: 'Medical Aid',
+          status: 'COMPLETED',
+          paidAt: new Date('2026-01-10T10:00:00.000Z'),
+          reference: 'SCHEME-1',
+          patient: {
+            id: 'patient-1', patientCode: 'P-00001', firstName: 'Jane', lastName: 'Doe', medicalAidName: 'Discovery Health', medicalAidNo: 'DH-1',
+          },
+          invoice: {
+            id: 'invoice-1', invoiceNumber: 'INV-001',
+            schemeClaims: [{ claimReference: 'CLM-1', status: 'PAID', scheme: { id: 'scheme-1', name: 'Discovery Health', code: 'DISC' } }],
+          },
+          paymentMethod: { name: 'Medical Aid', type: 'MEDICAL_AID' },
+        },
+        {
+          id: 'payment-scheme-2',
+          patientId: 'patient-2',
+          amount: 450,
+          methodName: 'Medical Aid',
+          status: 'COMPLETED',
+          paidAt: new Date('2026-01-11T10:00:00.000Z'),
+          reference: null,
+          patient: {
+            id: 'patient-2', patientCode: 'P-00002', firstName: 'John', lastName: 'Smith', medicalAidName: 'Momentum', medicalAidNo: 'MO-2',
+          },
+          invoice: { id: 'invoice-2', invoiceNumber: 'INV-002', schemeClaims: [] },
+          paymentMethod: { name: 'Medical Aid', type: 'MEDICAL_AID' },
+        },
+        {
+          id: 'payment-self-pay',
+          patientId: 'patient-3',
+          amount: 300,
+          methodName: 'Cash',
+          status: 'COMPLETED',
+          paidAt: new Date('2026-01-12T10:00:00.000Z'),
+          reference: 'CASH-1',
+          patient: {
+            id: 'patient-3', patientCode: 'P-00003', firstName: 'Mary', lastName: 'Jones', medicalAidName: 'Momentum', medicalAidNo: 'MO-3',
+          },
+          invoice: { id: 'invoice-3', invoiceNumber: 'INV-003', schemeClaims: [] },
+          paymentMethod: { name: 'Cash', type: 'CASH' },
+        },
+      ] as any);
+
+      const result = await reportService.getMedicalSchemePaymentReport(tenantId, dateRange);
+
+      expect(prisma.payment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ tenantId, status: 'COMPLETED' }),
+      }));
+      expect(result.summary).toEqual({ transactionCount: 2, patientCount: 2, schemeCount: 2, collectedAmount: 1250 });
+      expect(result.byScheme).toEqual(expect.arrayContaining([
+        expect.objectContaining({ scheme: 'Discovery Health', patientCount: 1, collectedAmount: 800 }),
+        expect.objectContaining({ scheme: 'Momentum', patientCount: 1, collectedAmount: 450 }),
+      ]));
+      expect(result.patients[0]).toMatchObject({ scheme: 'Discovery Health', claimReference: 'CLM-1', amount: 800 });
+    });
+  });
 });

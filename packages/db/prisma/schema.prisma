@@ -70,6 +70,7 @@ model Tenant {
   followUps             FollowUp[]
   paymentMethods        PaymentMethod[]
   payments              Payment[]
+  paymentRequests       PaymentRequest[]
   medicalSchemes        MedicalScheme[]
   schemeClaims          SchemeClaim[]
   treatmentPlans        TreatmentPlan[]
@@ -107,6 +108,7 @@ model User {
   assignedAssets        Asset[]             @relation("AssignedAssets")
   issuedDrugMovements   DrugStockMovement[] @relation("DrugMovementRecorder")
   receivedDrugMovements DrugStockMovement[] @relation("DrugMovementRecipient")
+  initiatedPaymentRequests PaymentRequest[] @relation("PaymentRequestInitiator")
 
   @@unique([tenantId, email])
 }
@@ -181,6 +183,7 @@ model Patient {
   reminderLogs    ReminderLog[]
   followUps       FollowUp[]
   payments        Payment[]
+  paymentRequests PaymentRequest[]
   schemeClaims    SchemeClaim[]
   treatmentPlans  TreatmentPlan[]
   clientTasks     ClientTask[]
@@ -341,6 +344,7 @@ model Invoice {
   patient      Patient       @relation(fields: [patientId], references: [id])
   appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
   payments     Payment[]
+  paymentRequests PaymentRequest[]
   schemeClaims SchemeClaim[]
 
   @@unique([tenantId, invoiceNumber])
@@ -503,6 +507,45 @@ model Payment {
   patient       Patient        @relation(fields: [patientId], references: [id])
   invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
   paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  paymentRequestId String? @unique
+  paymentRequest PaymentRequest? @relation("PaymentRequestPayment", fields: [paymentRequestId], references: [id])
+}
+
+model PaymentRequest {
+  id                         String   @id @default(uuid())
+  tenantId                   String
+  invoiceId                  String
+  patientId                  String
+  requestedById              String
+  provider                   String   @default("ONEKHUSA")
+  providerReference          String
+  merchantAccountNumber      Int?
+  timedAccountNumber         String?
+  amount                     Decimal  @db.Decimal(12, 2)
+  currency                   String   @default("MWK")
+  status                     String   @default("PENDING")
+  expiresAt                  DateTime?
+  lastPolledAt               DateTime?
+  nextPollAt                 DateTime?
+  providerTransactionReference String?
+  providerPaidAt             DateTime?
+  sourceAccountNumber        String?
+  sourceInstitution          String?
+  failureReason              String?
+  metadata                   Json?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  patient     Patient @relation(fields: [patientId], references: [id])
+  requestedBy User    @relation("PaymentRequestInitiator", fields: [requestedById], references: [id])
+  payment     Payment? @relation("PaymentRequestPayment")
+
+  @@unique([tenantId, providerReference])
+  @@index([tenantId, invoiceId, status])
+  @@index([tenantId, status, nextPollAt])
+  @@index([patientId, status])
 }
 
 model MedicalScheme {

@@ -16,6 +16,19 @@ interface PortalData {
   patient: { firstName: string; lastName: string };
   upcomingAppointments: { id: string; date: string; time: string; therapist: string; type: string; status: string }[];
   invoices: { id: string; invoiceNumber: string; date: string; amount: string; status: string }[];
+  paymentRequests: {
+    id: string;
+    invoiceNumber: string | null;
+    providerReference: string;
+    merchantAccountNumber: string | null;
+    accountNumber: string | null;
+    timedAccountNumber: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    expiresAt: string | null;
+    providerPaidAt: string | null;
+  }[];
   exercisePlans: { id: string; name: string; exercises: number; therapist: string }[];
   soapNotes: { id: string; date: string; therapist: string; summary: string }[];
 }
@@ -31,8 +44,8 @@ export default function PortalPage() {
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
-  const loadDashboard = async () => {
-    setLoading(true);
+  const loadDashboard = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const response = await api.get('/portal/dashboard');
@@ -46,6 +59,11 @@ export default function PortalPage() {
 
   useEffect(() => {
     void loadDashboard();
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => void loadDashboard(false), 15_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const payInvoice = async (invoiceId: string) => {
@@ -185,6 +203,47 @@ export default function PortalPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Receipt className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">OneKhusa payment requests</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">Use the timed account number and reference below in your bank or mobile-money app.</p>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Timed account number</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data.paymentRequests || []).map((request) => (
+                <TableRow key={request.id}>
+                  <TableCell className="font-medium">{request.invoiceNumber || '-'}</TableCell>
+                  <TableCell>{request.currency} {request.amount.toLocaleString()}</TableCell>
+                  <TableCell className="font-mono font-semibold">{request.accountNumber || 'Being generated'}</TableCell>
+                  <TableCell className="font-mono text-xs">{request.providerReference}</TableCell>
+                  <TableCell>{request.expiresAt ? new Date(request.expiresAt).toLocaleString() : '-'}</TableCell>
+                  <TableCell><Badge variant={request.status === 'PAID' ? 'success' : ['FAILED', 'EXPIRED', 'REVERSED'].includes(request.status) ? 'destructive' : 'warning'}>{request.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {(data.paymentRequests || []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No OneKhusa payment requests yet</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

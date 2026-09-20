@@ -17,11 +17,12 @@ export default async function portalRoutes(fastify: FastifyInstance) {
 
   fastify.get('/portal/dashboard', async (request: FastifyRequest, reply: FastifyReply) => {
     const profile = await portalService.getProfile(request.user.id);
-    const [appointments, invoices, plans, notes] = await Promise.all([
+    const [appointments, invoices, plans, notes, paymentRequests] = await Promise.all([
       portalService.getAppointments(profile.id),
       portalService.getInvoices(profile.id),
       portalService.getExercisePlans(profile.id),
       portalService.getSoapNotes(profile.id),
+      portalService.getPaymentRequests(profile.id),
     ]);
 
     return reply.send({
@@ -48,6 +49,7 @@ export default async function portalRoutes(fastify: FastifyInstance) {
           amount: `R ${Number(invoice.total).toLocaleString()}`,
           status: invoice.status,
         })),
+        paymentRequests,
         exercisePlans: plans.map((plan: any) => ({
           id: plan.id,
           name: plan.name,
@@ -86,6 +88,12 @@ export default async function portalRoutes(fastify: FastifyInstance) {
     const profile = await portalService.getProfile(request.user.id);
     const invoices = await portalService.getInvoices(profile.id);
     return reply.send({ success: true, data: invoices });
+  });
+
+  fastify.get('/portal/payment-requests', async (request: FastifyRequest, reply: FastifyReply) => {
+    const profile = await portalService.getProfile(request.user.id);
+    const paymentRequests = await portalService.getPaymentRequests(profile.id);
+    return reply.send({ success: true, data: paymentRequests });
   });
 
   fastify.get('/portal/exercise-plans', async (request: FastifyRequest, reply: FastifyReply) => {

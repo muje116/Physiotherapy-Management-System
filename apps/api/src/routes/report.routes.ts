@@ -107,6 +107,18 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   );
 
   fastify.get(
+    '/reports/medical-scheme-payments',
+    { preHandler: [requirePermission('finance:read')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const query = reportQuerySchema.parse(request.query);
+      const data = await reportService.getMedicalSchemePaymentReport(request.tenantId, query, {
+        schemeId: query.schemeId,
+      });
+      return reply.send({ success: true, data });
+    }
+  );
+
+  fastify.get(
     '/reports/dashboard',
     { preHandler: [requirePermission('finance:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {

@@ -46,6 +46,24 @@ interface PaymentSummary {
   byMethod: { method: string; total: number; count: number }[];
 }
 
+interface PaymentRequest {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  patientName: string | null;
+  patientCode: string | null;
+  providerReference: string;
+  accountNumber: string | null;
+  merchantAccountNumber: string | null;
+  timedAccountNumber: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  expiresAt: string | null;
+  providerPaidAt: string | null;
+  failureReason: string | null;
+}
+
 const METHOD_TYPE_OPTIONS = [
   { value: 'CASH', label: 'Cash' },
   { value: 'CARD', label: 'Card' },
@@ -68,6 +86,7 @@ export default function PaymentsPage() {
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [invoices, setInvoices] = useState<InvoiceOption[]>([]);
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +107,12 @@ export default function PaymentsPage() {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
 
+  const [requestDialog, setRequestDialog] = useState(false);
+  const [requestInvoiceId, setRequestInvoiceId] = useState('');
+  const [requestAmount, setRequestAmount] = useState('');
+  const [requestSaving, setRequestSaving] = useState(false);
+  const [pollingRequestId, setPollingRequestId] = useState<string | null>(null);
+
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filterMethod, setFilterMethod] = useState('');
@@ -104,7 +129,8 @@ export default function PaymentsPage() {
       api.get('/payments/summary'),
       api.get('/patients', { params: { page: 1, limit: 100 } }).catch(() => ({ data: { data: [] } })),
       api.get('/invoices', { params: { page: 1, limit: 100 } }).catch(() => ({ data: { data: [] } })),
-    ]).then(([mRes, pRes, sRes, patientsRes, invoicesRes]) => {
+      api.get('/payments/requests', { params: { page: 1, limit: 100 } }).catch(() => ({ data: { data: [] } })),
+    ]).then(([mRes, pRes, sRes, patientsRes, invoicesRes, requestsRes]) => {
       setMethods(mRes.data.data || []);
       setPayments((pRes.data.data || []).map((payment: any) => ({
         id: payment.id,
@@ -135,11 +161,25 @@ export default function PaymentsPage() {
         total: Number(invoice.total || 0),
         status: invoice.status,
       })));
+      setPaymentRequests(requestsRes.data.data || []);
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(async () => {
+      try {
+        const response = await api.get('/payments/requests', { params: { page: 1, limit: 100 } });
+        setPaymentRequests(response.data.data || []);
+      } catch {
+        // The worker and webhook remain responsible for settlement; a silent
+        // refresh should not interrupt the staff member's current task.
+      }
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const resetMethodForm = () => {
     setMethodName('');
@@ -163,6 +203,53 @@ export default function PaymentsPage() {
   const openNewPayment = () => {
     resetPaymentForm();
     setPaymentDialog(true);
+  };
+
+  const openNewPaymentRequest = () => {
+    setRequestInvoiceId('');
+    setRequestAmount('');
+    setRequestDialog(true);
+  };
+
+  const handleRequestInvoiceChange = (invoiceId: string) => {
+    setRequestInvoiceId(invoiceId);
+    setRequestAmount('');
+  };
+
+  const createPaymentRequest = async () => {
+    if (!requestInvoiceId) {
+      setError('Select an invoice before creating a payment request.');
+      return;
+    }
+    setRequestSaving(true);
+    setError(null);
+    try {
+      await api.post('/payments/requests', {
+        invoiceId: requestInvoiceId,
+        amount: requestAmount ? Number(requestAmount) : undefined,
+      });
+      setRequestDialog(false);
+      await fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || err.message || 'Unable to create payment request');
+    } finally {
+      setRequestSaving(false);
+    }
+  };
+
+  const pollPaymentRequest = async (id: string) => {
+    setPollingRequestId(id);
+    setError(null);
+    try {
+      const response = await api.post(`/payments/requests/${id}/poll`);
+      const updated = response.data.data;
+      setPaymentRequests((current) => current.map((request) => request.id === id ? updated : request));
+      if (updated.status === 'PAID') await fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || err.message || 'Unable to check payment request');
+    } finally {
+      setPollingRequestId(null);
+    }
   };
 
   const handleInvoiceChange = (invoiceId: string) => {
@@ -385,6 +472,7 @@ export default function PaymentsPage() {
         <TabsList>
           <TabsTrigger value="methods">Payment Methods</TabsTrigger>
           <TabsTrigger value="history">Payment History</TabsTrigger>
+          <TabsTrigger value="requests">OneKhusa Requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="methods">
@@ -510,6 +598,70 @@ export default function PaymentsPage() {
                   {filteredPayments.length === 0 && (
                     <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No payments found</TableCell></TableRow>
                   )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="requests">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Request to pay</CardTitle>
+                <p className="text-sm text-muted-foreground">Generate a 15-minute OneKhusa timed account number for an outstanding invoice.</p>
+              </div>
+              <Dialog open={requestDialog} onOpenChange={setRequestDialog}>
+                <Button onClick={openNewPaymentRequest}><Plus className="mr-2 h-4 w-4" /> Request payment</Button>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Create OneKhusa request</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Invoice</Label>
+                      <Select
+                        options={invoices.filter((invoice) => !['PAID', 'VOID'].includes(invoice.status)).map((invoice) => ({
+                          value: invoice.id,
+                          label: `${invoice.invoiceNumber} - R ${invoice.total.toLocaleString()}`,
+                        }))}
+                        value={requestInvoiceId}
+                        onChange={(event) => handleRequestInvoiceChange(event.target.value)}
+                        placeholder="Select invoice"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amount</Label>
+                      <Input type="number" min="0.01" step="0.01" value={requestAmount} onChange={(event) => setRequestAmount(event.target.value)} placeholder="Full outstanding balance" />
+                      <p className="text-xs text-muted-foreground">Leave blank to request the current outstanding balance. The member will use the TAN and reference generated by OneKhusa.</p>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <DialogClose asChild><Button variant="outline" disabled={requestSaving}>Cancel</Button></DialogClose>
+                      <Button onClick={() => void createPaymentRequest()} disabled={requestSaving}>
+                        {requestSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create request
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              <Table>
+                <TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Patient</TableHead><TableHead>Amount</TableHead><TableHead>TAN / account</TableHead><TableHead>Reference</TableHead><TableHead>Expires</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
+                <TableBody>
+                  {paymentRequests.map((request) => (
+                    <TableRow key={request.id}>
+                      <TableCell className="font-medium">{request.invoiceNumber || '-'}</TableCell>
+                      <TableCell>{request.patientName || request.patientCode || '-'}</TableCell>
+                      <TableCell>{request.currency} {request.amount.toLocaleString()}</TableCell>
+                      <TableCell className="font-mono font-semibold">{request.accountNumber || 'Pending'}</TableCell>
+                      <TableCell className="font-mono text-xs">{request.providerReference}</TableCell>
+                      <TableCell>{request.expiresAt ? new Date(request.expiresAt).toLocaleString() : '-'}</TableCell>
+                      <TableCell><StatusBadge status={request.status} /></TableCell>
+                      <TableCell className="text-right">
+                        {['PENDING', 'PROCESSING'].includes(request.status) && <Button variant="outline" size="sm" onClick={() => void pollPaymentRequest(request.id)} disabled={pollingRequestId === request.id}>{pollingRequestId === request.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Check</Button>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {paymentRequests.length === 0 && <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">No OneKhusa payment requests</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>

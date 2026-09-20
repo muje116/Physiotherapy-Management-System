@@ -224,6 +224,58 @@ async function buildReport(type: string, tenantId: string, startDate: Date, endD
         })),
       };
     }
+    case 'medical-scheme-payments': {
+      const payments = await prisma.payment.findMany({
+        where: {
+          tenantId,
+          status: 'COMPLETED',
+          paidAt: { gte: startDate, lte: endDate },
+          OR: [
+            { methodName: { contains: 'MEDICAL', mode: 'insensitive' } },
+            { paymentMethod: { is: { type: { contains: 'MEDICAL', mode: 'insensitive' } } } },
+            { invoice: { schemeClaims: { some: {} } } },
+          ],
+        },
+        include: {
+          patient: { select: { patientCode: true, firstName: true, lastName: true, medicalAidName: true, medicalAidNo: true } },
+          invoice: {
+            select: {
+              invoiceNumber: true,
+              schemeClaims: {
+                include: { scheme: { select: { name: true, code: true } } },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+          paymentMethod: { select: { name: true, type: true } },
+        },
+        orderBy: { paidAt: 'desc' },
+      });
+      const rows = payments.filter((payment: any) => {
+        const method = `${payment.methodName || ''} ${payment.paymentMethod?.type || ''}`.toLowerCase();
+        return method.includes('medical') || payment.invoice?.schemeClaims?.length;
+      });
+      return {
+        title: 'Medical Scheme Collections Report',
+        headers: ['Scheme', 'Scheme Code', 'Patient Code', 'Patient', 'Medical Aid Number', 'Invoice', 'Date', 'Amount', 'Method', 'Reference'],
+        rows: rows.map((payment: any) => {
+          const scheme = payment.invoice?.schemeClaims?.[0]?.scheme;
+          return {
+            Scheme: scheme?.name || payment.patient.medicalAidName || 'Medical scheme not linked',
+            'Scheme Code': scheme?.code || '',
+            'Patient Code': payment.patient.patientCode,
+            Patient: `${payment.patient.firstName} ${payment.patient.lastName}`,
+            'Medical Aid Number': payment.patient.medicalAidNo || '',
+            Invoice: payment.invoice?.invoiceNumber || '',
+            Date: payment.paidAt.toISOString(),
+            Amount: Number(payment.amount).toFixed(2),
+            Method: payment.paymentMethod?.name || payment.methodName || 'Medical Aid',
+            Reference: payment.reference || '',
+          };
+        }),
+      };
+    }
     default:
       throw new Error(`Unsupported report type: ${type}`);
   }
