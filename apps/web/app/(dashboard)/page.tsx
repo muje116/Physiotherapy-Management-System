@@ -37,7 +37,22 @@ export default function DashboardPage() {
       api.get('/treatment-plans?status=ACTIVE').catch(() => ({ data: { data: null } })),
       api.get('/client-tasks/stats').catch(() => ({ data: { data: null } })),
     ]).then(([dashRes, fupRes, tpRes, ctRes]) => {
-      setData(dashRes.data.data);
+      const dashboard = dashRes.data.data ?? {};
+      const metrics = dashboard.metrics ?? {
+        totalPatients: dashboard.totalPatients ?? 0,
+        todayAppointments: dashboard.todayAppointments ?? 0,
+        revenueThisMonth: Number(dashboard.revenueThisMonth ?? 0),
+        outstandingInvoices: Number(dashboard.outstandingInvoices ?? 0),
+        noShowRate: typeof dashboard.noShowRate === 'number' ? `${dashboard.noShowRate}%` : (dashboard.noShowRate ?? '0%'),
+        therapistUtilisation: typeof dashboard.utilisation === 'number' ? `${dashboard.utilisation}%` : (dashboard.therapistUtilisation ?? '0%'),
+      };
+
+      setData({
+        metrics,
+        revenueTrend: dashboard.revenueTrend ?? [],
+        appointmentsByType: dashboard.appointmentsByType ?? [],
+        todayAppts: dashboard.todayAppts ?? [],
+      });
       setFollowUpStats(fupRes.data.data);
       setTreatmentPlans(tpRes.data.data);
       setTaskStats(ctRes.data.data);
