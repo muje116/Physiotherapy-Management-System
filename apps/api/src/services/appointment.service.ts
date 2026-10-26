@@ -196,7 +196,13 @@ export async function checkIn(
 ) {
   const appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, tenantId } });
   if (!appointment) throw new NotFoundError('Appointment not found');
-  if ([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW, AppointmentStatus.COMPLETED, AppointmentStatus.IN_SESSION].includes(appointment.status)) {
+  const blockedCheckInStatuses: AppointmentStatus[] = [
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.NO_SHOW,
+    AppointmentStatus.COMPLETED,
+    AppointmentStatus.IN_SESSION,
+  ];
+  if (blockedCheckInStatuses.includes(appointment.status)) {
     throw new ConflictError('This appointment can no longer be checked in');
   }
 
