@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Edit, Mail, MapPin, Phone, Calendar, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Activity, Edit, Mail, MapPin, Phone, Calendar, Loader2, Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { StatusBadge } from '@/components/status-badge';
 import { Avatar } from '@/components/ui/avatar';
@@ -45,6 +45,12 @@ interface PatientDetail {
   nextOfKinName: string;
   nextOfKinPhone: string;
   howHeardAboutClinic: string;
+  allergies: string[];
+  chronicConditions: string[];
+  currentMedications: string[];
+  bloodType: string;
+  preferredLanguage: string;
+  clinicalPrecautions: string;
   appointments: Array<{
     id: string;
     date: string;
@@ -112,6 +118,22 @@ interface PatientDetail {
     percentage: number;
     notes: string;
   }>;
+  observations: Array<{
+    id: string;
+    recordedAt: string;
+    appointment: { id: string; startAt: string; type: string } | null;
+    recordedBy: { firstName: string; lastName: string; jobTitle?: string | null } | null;
+    systolicBp: number | null;
+    diastolicBp: number | null;
+    pulse: number | null;
+    respiratoryRate: number | null;
+    temperatureC: number | null;
+    oxygenSaturation: number | null;
+    weightKg: number | null;
+    heightCm: number | null;
+    painScore: number | null;
+    notes: string;
+  }>;
   timeline: Array<{ date: string; time: string; event: string; title: string; summary: string; actor: string; type: string }>;
 }
 
@@ -128,6 +150,21 @@ type OutcomeForm = {
   notes: string;
 };
 
+type ObservationForm = {
+  appointmentId: string;
+  recordedAt: string;
+  systolicBp: string;
+  diastolicBp: string;
+  pulse: string;
+  respiratoryRate: string;
+  temperatureC: string;
+  oxygenSaturation: string;
+  weightKg: string;
+  heightCm: string;
+  painScore: string;
+  notes: string;
+};
+
 const OUTCOME_TYPES = [
   { value: 'DASH', label: 'DASH' },
   { value: 'LEFS', label: 'LEFS' },
@@ -140,6 +177,23 @@ const OUTCOME_TYPES = [
 
 function emptyOutcomeForm(): OutcomeForm {
   return { type: 'DASH', score: '', maxScore: '100', recordedAt: formatDate(new Date()), notes: '' };
+}
+
+function emptyObservationForm(): ObservationForm {
+  return {
+    appointmentId: '',
+    recordedAt: new Date().toISOString().slice(0, 16),
+    systolicBp: '',
+    diastolicBp: '',
+    pulse: '',
+    respiratoryRate: '',
+    temperatureC: '',
+    oxygenSaturation: '',
+    weightKg: '',
+    heightCm: '',
+    painScore: '',
+    notes: '',
+  };
 }
 
 function mapOutcomeMeasure(measure: any) {
@@ -196,6 +250,10 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const [outcomeForm, setOutcomeForm] = useState<OutcomeForm>(emptyOutcomeForm);
   const [outcomeSaving, setOutcomeSaving] = useState(false);
   const [outcomeError, setOutcomeError] = useState<string | null>(null);
+  const [observationDialogOpen, setObservationDialogOpen] = useState(false);
+  const [observationForm, setObservationForm] = useState<ObservationForm>(emptyObservationForm);
+  const [observationSaving, setObservationSaving] = useState(false);
+  const [observationError, setObservationError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -205,11 +263,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
       api.get(`/patients/${id}/invoices`),
       api.get(`/patients/${id}/exercise-plans`),
       api.get(`/patients/${id}/outcome-measures`),
+      api.get(`/patients/${id}/clinical-observations`),
       api.get(`/patients/${id}/timeline`),
       api.get('/treatment-plans', { params: { patientId: id, page: 1, limit: 100 } })
         .catch(() => ({ data: { data: [] } })),
     ])
-      .then(([patientRes, appointmentsRes, notesRes, invoicesRes, plansRes, outcomesRes, timelineRes, treatmentPlansRes]) => {
+      .then(([patientRes, appointmentsRes, notesRes, invoicesRes, plansRes, outcomesRes, observationsRes, timelineRes, treatmentPlansRes]) => {
         const rawPatient = patientRes.data.data;
         const assignedTherapist = rawPatient.therapists?.[0]?.therapist?.user
           ? `${rawPatient.therapists[0].therapist.user.firstName} ${rawPatient.therapists[0].therapist.user.lastName}`
@@ -243,6 +302,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           nextOfKinName: rawPatient.nextOfKinName || '',
           nextOfKinPhone: rawPatient.nextOfKinPhone || '',
           howHeardAboutClinic: rawPatient.howHeardAboutClinic || '',
+          allergies: Array.isArray(rawPatient.allergies) ? rawPatient.allergies : [],
+          chronicConditions: Array.isArray(rawPatient.chronicConditions) ? rawPatient.chronicConditions : [],
+          currentMedications: Array.isArray(rawPatient.currentMedications) ? rawPatient.currentMedications : [],
+          bloodType: rawPatient.bloodType || '',
+          preferredLanguage: rawPatient.preferredLanguage || '',
+          clinicalPrecautions: rawPatient.clinicalPrecautions || '',
           appointments: (appointmentsRes.data.data || []).map((appointment: any) => ({
             id: appointment.id,
             date: formatDate(appointment.startAt),
@@ -295,6 +360,22 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             exercises: plan.items?.length || 0,
           })),
           outcomeScores: (outcomesRes.data.data || []).map(mapOutcomeMeasure).reverse(),
+          observations: (observationsRes.data.data || []).map((observation: any) => ({
+            id: observation.id,
+            recordedAt: observation.recordedAt,
+            appointment: observation.appointment || null,
+            recordedBy: observation.recordedBy || null,
+            systolicBp: observation.systolicBp == null ? null : Number(observation.systolicBp),
+            diastolicBp: observation.diastolicBp == null ? null : Number(observation.diastolicBp),
+            pulse: observation.pulse == null ? null : Number(observation.pulse),
+            respiratoryRate: observation.respiratoryRate == null ? null : Number(observation.respiratoryRate),
+            temperatureC: observation.temperatureC == null ? null : Number(observation.temperatureC),
+            oxygenSaturation: observation.oxygenSaturation == null ? null : Number(observation.oxygenSaturation),
+            weightKg: observation.weightKg == null ? null : Number(observation.weightKg),
+            heightCm: observation.heightCm == null ? null : Number(observation.heightCm),
+            painScore: observation.painScore == null ? null : Number(observation.painScore),
+            notes: observation.notes || '',
+          })),
           timeline: (timelineRes.data.data || []).map((item: any) => ({
             date: formatDate(item.date),
             time: formatTime(item.date),
@@ -396,6 +477,83 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     }
   };
 
+  const refreshObservations = async () => {
+    const response = await api.get(`/patients/${id}/clinical-observations`);
+    const observations = (response.data.data || []).map((observation: any) => ({
+      id: observation.id,
+      recordedAt: observation.recordedAt,
+      appointment: observation.appointment || null,
+      recordedBy: observation.recordedBy || null,
+      systolicBp: observation.systolicBp == null ? null : Number(observation.systolicBp),
+      diastolicBp: observation.diastolicBp == null ? null : Number(observation.diastolicBp),
+      pulse: observation.pulse == null ? null : Number(observation.pulse),
+      respiratoryRate: observation.respiratoryRate == null ? null : Number(observation.respiratoryRate),
+      temperatureC: observation.temperatureC == null ? null : Number(observation.temperatureC),
+      oxygenSaturation: observation.oxygenSaturation == null ? null : Number(observation.oxygenSaturation),
+      weightKg: observation.weightKg == null ? null : Number(observation.weightKg),
+      heightCm: observation.heightCm == null ? null : Number(observation.heightCm),
+      painScore: observation.painScore == null ? null : Number(observation.painScore),
+      notes: observation.notes || '',
+    }));
+    setPatient((current) => current ? { ...current, observations } : current);
+  };
+
+  const saveObservation = async () => {
+    const numeric = (value: string) => value.trim() ? Number(value) : undefined;
+    const payload = {
+      appointmentId: observationForm.appointmentId || undefined,
+      recordedAt: observationForm.recordedAt ? new Date(observationForm.recordedAt).toISOString() : undefined,
+      systolicBp: numeric(observationForm.systolicBp),
+      diastolicBp: numeric(observationForm.diastolicBp),
+      pulse: numeric(observationForm.pulse),
+      respiratoryRate: numeric(observationForm.respiratoryRate),
+      temperatureC: numeric(observationForm.temperatureC),
+      oxygenSaturation: numeric(observationForm.oxygenSaturation),
+      weightKg: numeric(observationForm.weightKg),
+      heightCm: numeric(observationForm.heightCm),
+      painScore: numeric(observationForm.painScore),
+      notes: observationForm.notes.trim() || undefined,
+    };
+
+    const measurementKeys = [
+      'systolicBp',
+      'diastolicBp',
+      'pulse',
+      'respiratoryRate',
+      'temperatureC',
+      'oxygenSaturation',
+      'weightKg',
+      'heightCm',
+      'painScore',
+    ] as const;
+    const hasMeasurement = measurementKeys.some((key) => payload[key] !== undefined);
+    if (!hasMeasurement && !payload.notes) {
+      setObservationError('Record at least one observation.');
+      return;
+    }
+    if (payload.systolicBp !== undefined && payload.diastolicBp !== undefined && payload.diastolicBp >= payload.systolicBp) {
+      setObservationError('Diastolic pressure must be below systolic pressure.');
+      return;
+    }
+    if (Object.entries(payload).some(([key, value]) => key !== 'appointmentId' && key !== 'recordedAt' && key !== 'notes' && value !== undefined && !Number.isFinite(value))) {
+      setObservationError('Use valid numbers for clinical measurements.');
+      return;
+    }
+
+    setObservationSaving(true);
+    setObservationError(null);
+    try {
+      await api.post(`/patients/${id}/clinical-observations`, payload);
+      await refreshObservations();
+      setObservationDialogOpen(false);
+      setObservationForm(emptyObservationForm());
+    } catch (err: any) {
+      setObservationError(err.response?.data?.error?.message || err.message || 'Unable to save observation');
+    } finally {
+      setObservationSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="space-y-4 p-6"><Skeleton className="h-12 w-64" /><Skeleton className="h-96" /></div>;
   }
@@ -452,6 +610,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           nextOfKinName: updated.nextOfKinName || '',
           nextOfKinPhone: updated.nextOfKinPhone || '',
           howHeardAboutClinic: updated.howHeardAboutClinic || '',
+          allergies: Array.isArray(updated.allergies) ? updated.allergies : [],
+          chronicConditions: Array.isArray(updated.chronicConditions) ? updated.chronicConditions : [],
+          currentMedications: Array.isArray(updated.currentMedications) ? updated.currentMedications : [],
+          bloodType: updated.bloodType || '',
+          preferredLanguage: updated.preferredLanguage || '',
+          clinicalPrecautions: updated.clinicalPrecautions || '',
         } : current)}
       />
 
@@ -495,6 +659,57 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
         </DialogContent>
       </Dialog>
 
+      <Dialog open={observationDialogOpen} onOpenChange={(nextOpen) => !observationSaving && setObservationDialogOpen(nextOpen)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Record clinical observation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {observationError && <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{observationError}</p>}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Recorded at</Label>
+                <Input type="datetime-local" value={observationForm.recordedAt} onChange={(event) => setObservationForm((current) => ({ ...current, recordedAt: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Appointment (optional)</Label>
+                <Select
+                  options={patient.appointments.map((appointment) => ({ value: appointment.id, label: `${appointment.date} ${appointment.time} - ${appointment.type}` }))}
+                  value={observationForm.appointmentId}
+                  onChange={(event) => setObservationForm((current) => ({ ...current, appointmentId: event.target.value }))}
+                  placeholder="Not linked to an appointment"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold">Vitals</p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <ObservationInput label="Systolic BP" value={observationForm.systolicBp} onChange={(value) => setObservationForm((current) => ({ ...current, systolicBp: value }))} placeholder="mmHg" />
+                <ObservationInput label="Diastolic BP" value={observationForm.diastolicBp} onChange={(value) => setObservationForm((current) => ({ ...current, diastolicBp: value }))} placeholder="mmHg" />
+                <ObservationInput label="Pulse" value={observationForm.pulse} onChange={(value) => setObservationForm((current) => ({ ...current, pulse: value }))} placeholder="bpm" />
+                <ObservationInput label="Respiratory rate" value={observationForm.respiratoryRate} onChange={(value) => setObservationForm((current) => ({ ...current, respiratoryRate: value }))} placeholder="per min" />
+                <ObservationInput label="Temperature" value={observationForm.temperatureC} onChange={(value) => setObservationForm((current) => ({ ...current, temperatureC: value }))} placeholder="C" step="0.1" />
+                <ObservationInput label="Oxygen saturation" value={observationForm.oxygenSaturation} onChange={(value) => setObservationForm((current) => ({ ...current, oxygenSaturation: value }))} placeholder="%" />
+                <ObservationInput label="Weight" value={observationForm.weightKg} onChange={(value) => setObservationForm((current) => ({ ...current, weightKg: value }))} placeholder="kg" step="0.01" />
+                <ObservationInput label="Height" value={observationForm.heightCm} onChange={(value) => setObservationForm((current) => ({ ...current, heightCm: value }))} placeholder="cm" step="0.01" />
+                <ObservationInput label="Pain score" value={observationForm.painScore} onChange={(value) => setObservationForm((current) => ({ ...current, painScore: value }))} placeholder="0 to 10" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea value={observationForm.notes} onChange={(event) => setObservationForm((current) => ({ ...current, notes: event.target.value }))} rows={3} placeholder="Position, context, or other clinical observation" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setObservationDialogOpen(false)} disabled={observationSaving}>Cancel</Button>
+              <Button onClick={() => void saveObservation()} disabled={observationSaving}>
+                {observationSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Record observation
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -504,6 +719,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
           <TabsTrigger value="exercises">Exercise Plans</TabsTrigger>
           <TabsTrigger value="outcomes">Outcome Measures</TabsTrigger>
+          <TabsTrigger value="observations">Vitals</TabsTrigger>
            <TabsTrigger value="timeline">Full History</TabsTrigger>
         </TabsList>
 
@@ -551,6 +767,20 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                 <div className="text-sm"><span className="text-muted-foreground">Next of kin:</span> {patient.nextOfKinName || '-'}</div>
                 <div className="text-sm"><span className="text-muted-foreground">Kin phone:</span> {patient.nextOfKinPhone || '-'}</div>
                 <div className="text-sm"><span className="text-muted-foreground">Heard about clinic:</span> {patient.howHeardAboutClinic || '-'}</div>
+              </CardContent>
+            </Card>
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base"><Activity className="h-4 w-4 text-primary" /> Clinical safety profile</CardTitle>
+                <CardDescription>Review this information before treatment and update it when the patient reports a change.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-3">
+                <ClinicalListField label="Allergies" values={patient.allergies} />
+                <ClinicalListField label="Chronic conditions" values={patient.chronicConditions} />
+                <ClinicalListField label="Current medications" values={patient.currentMedications} />
+                <ClinicalField label="Blood type" value={patient.bloodType} />
+                <ClinicalField label="Preferred language" value={patient.preferredLanguage} />
+                <ClinicalField label="Precautions / alerts" value={patient.clinicalPrecautions} />
               </CardContent>
             </Card>
           </div>
@@ -763,6 +993,47 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           {outcomeError && !outcomeDialogOpen && <p className="text-sm text-destructive">{outcomeError}</p>}
         </TabsContent>
 
+        <TabsContent value="observations">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Vitals and clinical observations</CardTitle>
+                <CardDescription>Structured observations remain part of the patient history and are linked to appointments when applicable.</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => { setObservationError(null); setObservationForm(emptyObservationForm()); setObservationDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" /> Record observation</Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Recorded</TableHead>
+                    <TableHead>Blood pressure</TableHead>
+                    <TableHead>Pulse / respiration</TableHead>
+                    <TableHead>Temp / SpO2</TableHead>
+                    <TableHead>Weight / height</TableHead>
+                    <TableHead>Pain</TableHead>
+                    <TableHead>Recorded by</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {patient.observations.map((observation) => (
+                    <TableRow key={observation.id}>
+                      <TableCell>{new Date(observation.recordedAt).toLocaleString()}</TableCell>
+                      <TableCell>{observation.systolicBp != null && observation.diastolicBp != null ? `${observation.systolicBp}/${observation.diastolicBp}` : '-'}</TableCell>
+                      <TableCell>{observation.pulse != null ? `${observation.pulse} bpm` : '-'} / {observation.respiratoryRate != null ? `${observation.respiratoryRate}/min` : '-'}</TableCell>
+                      <TableCell>{observation.temperatureC != null ? `${observation.temperatureC} C` : '-'} / {observation.oxygenSaturation != null ? `${observation.oxygenSaturation}%` : '-'}</TableCell>
+                      <TableCell>{observation.weightKg != null ? `${observation.weightKg} kg` : '-'} / {observation.heightCm != null ? `${observation.heightCm} cm` : '-'}</TableCell>
+                      <TableCell>{observation.painScore == null ? '-' : `${observation.painScore}/10`}</TableCell>
+                      <TableCell>{observation.recordedBy ? `${observation.recordedBy.firstName} ${observation.recordedBy.lastName}` : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                  {patient.observations.length === 0 && <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No observations recorded</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="timeline">
           <Card>
             <CardHeader>
@@ -847,6 +1118,40 @@ function ClinicalField({ label, value }: { label: string; value?: string | null 
     <div className="min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 whitespace-pre-wrap text-sm">{value || '-'}</p>
+    </div>
+  );
+}
+
+function ClinicalListField({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      {values.length > 0 ? (
+        <ul className="mt-1 list-inside list-disc space-y-1 text-sm">
+          {values.map((value) => <li key={value}>{value}</li>)}
+        </ul>
+      ) : <p className="mt-1 text-sm">-</p>}
+    </div>
+  );
+}
+
+function ObservationInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  step = '1',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  step?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input type="number" min="0" step={step} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </div>
   );
 }

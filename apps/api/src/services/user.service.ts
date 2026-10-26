@@ -189,6 +189,17 @@ export async function update(tenantId: string, userId: string, data: {
     },
   });
 
+  const therapistClient = (prisma as any).therapist;
+  if (therapistClient?.updateMany && (data.role !== undefined || data.isActive === false)) {
+    const shouldDeactivate = data.isActive === false || (data.role !== undefined && data.role !== Role.THERAPIST);
+    if (shouldDeactivate) {
+      await therapistClient.updateMany({
+        where: { userId, tenantId },
+        data: { isActive: false },
+      });
+    }
+  }
+
   return updated;
 }
 

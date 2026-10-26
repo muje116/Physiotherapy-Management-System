@@ -8,13 +8,14 @@ export function getAccessToken(): string | null {
 }
 
 export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  // Refresh tokens are now held in an httpOnly cookie by the API. Keep this
+  // getter for older clients, but never read or persist the sensitive token.
+  return null;
 }
 
-export function setTokens(accessToken: string, refreshToken: string) {
+export function setTokens(accessToken: string, _refreshToken?: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function clearTokens() {

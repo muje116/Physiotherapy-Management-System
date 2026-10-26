@@ -19,4 +19,5 @@ export * from './notification';
 export * from './outcome-measure';
 export * from './client-task';
 export * from './inventory';
+export * from './clinical-observation';
 export * from './common';

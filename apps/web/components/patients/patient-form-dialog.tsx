@@ -31,6 +31,12 @@ export interface PatientFormPatient {
   nextOfKinName?: string | null;
   nextOfKinPhone?: string | null;
   howHeardAboutClinic?: string | null;
+  allergies?: string[] | null;
+  chronicConditions?: string[] | null;
+  currentMedications?: string[] | null;
+  bloodType?: string | null;
+  preferredLanguage?: string | null;
+  clinicalPrecautions?: string | null;
 }
 
 interface PatientFormState {
@@ -57,6 +63,12 @@ interface PatientFormState {
   nextOfKinName: string;
   nextOfKinPhone: string;
   howHeardAboutClinic: string;
+  allergies: string;
+  chronicConditions: string;
+  currentMedications: string;
+  bloodType: string;
+  preferredLanguage: string;
+  clinicalPrecautions: string;
 }
 
 const emptyForm: PatientFormState = {
@@ -83,6 +95,12 @@ const emptyForm: PatientFormState = {
   nextOfKinName: '',
   nextOfKinPhone: '',
   howHeardAboutClinic: '',
+  allergies: '',
+  chronicConditions: '',
+  currentMedications: '',
+  bloodType: '',
+  preferredLanguage: '',
+  clinicalPrecautions: '',
 };
 
 function dateInputValue(value?: string | Date | null) {
@@ -128,7 +146,21 @@ function formFromPatient(patient?: PatientFormPatient | null): PatientFormState 
     nextOfKinName: patient.nextOfKinName || '',
     nextOfKinPhone: patient.nextOfKinPhone || '',
     howHeardAboutClinic: patient.howHeardAboutClinic || '',
+    allergies: listToText(patient.allergies),
+    chronicConditions: listToText(patient.chronicConditions),
+    currentMedications: listToText(patient.currentMedications),
+    bloodType: patient.bloodType || '',
+    preferredLanguage: patient.preferredLanguage || '',
+    clinicalPrecautions: patient.clinicalPrecautions || '',
   };
+}
+
+function listToText(value?: string[] | null) {
+  return Array.isArray(value) ? value.join('\n') : '';
+}
+
+function textToList(value: string) {
+  return Array.from(new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean)));
 }
 
 function errorMessage(error: any) {
@@ -200,6 +232,12 @@ export function PatientFormDialog({
       nextOfKinName: optional(form.nextOfKinName),
       nextOfKinPhone: optional(form.nextOfKinPhone),
       howHeardAboutClinic: optional(form.howHeardAboutClinic),
+      allergies: textToList(form.allergies),
+      chronicConditions: textToList(form.chronicConditions),
+      currentMedications: textToList(form.currentMedications),
+      bloodType: optional(form.bloodType),
+      preferredLanguage: optional(form.preferredLanguage),
+      clinicalPrecautions: optional(form.clinicalPrecautions),
     };
 
     try {
@@ -308,6 +346,31 @@ export function PatientFormDialog({
             <Field label="How did you hear about the clinic?" value={form.howHeardAboutClinic} onChange={(value) => updateField('howHeardAboutClinic', value)} />
           </section>
 
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Clinical safety profile</h3>
+              <p className="text-xs text-muted-foreground">Enter one item per line. This information is shown before clinical treatment.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <ListField label="Allergies" value={form.allergies} onChange={(value) => updateField('allergies', value)} placeholder="e.g. Penicillin" />
+              <ListField label="Chronic conditions" value={form.chronicConditions} onChange={(value) => updateField('chronicConditions', value)} placeholder="e.g. Hypertension" />
+              <ListField label="Current medications" value={form.currentMedications} onChange={(value) => updateField('currentMedications', value)} placeholder="e.g. Ibuprofen 400 mg" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Blood type" value={form.bloodType} onChange={(value) => updateField('bloodType', value)} />
+                <Field label="Preferred language" value={form.preferredLanguage} onChange={(value) => updateField('preferredLanguage', value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Clinical precautions / alerts</Label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={form.clinicalPrecautions}
+                onChange={(event) => updateField('clinicalPrecautions', event.target.value)}
+                placeholder="Falls risk, contraindications, communication needs, or other alerts"
+              />
+            </div>
+          </section>
+
           {error && <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
@@ -345,6 +408,20 @@ function Field({
         {required && <span className="text-destructive"> *</span>}
       </Label>
       <Input required={required} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function ListField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <textarea
+        className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
     </div>
   );
 }

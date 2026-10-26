@@ -26,6 +26,9 @@ export const exportReportSchema = z.object({
   dateRange: z.object({
     startDate: z.string().datetime(),
     endDate: z.string().datetime(),
+  }).refine((value) => new Date(value.startDate) <= new Date(value.endDate), {
+    message: 'startDate must be before or equal to endDate',
+    path: ['endDate'],
   }),
 });
 

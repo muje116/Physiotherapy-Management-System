@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,6 +80,10 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'REFUNDED', label: 'Refunded' },
 ];
 
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toISOString().split('T')[0] : '';
+}
+
 export default function PaymentsPage() {
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -118,9 +122,7 @@ export default function PaymentsPage() {
   const [filterMethod, setFilterMethod] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  const formatDate = (value?: string | null) => (value ? new Date(value).toISOString().split('T')[0] : '');
-
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setError(null);
     Promise.all([
@@ -164,9 +166,9 @@ export default function PaymentsPage() {
       setPaymentRequests(requestsRes.data.data || []);
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
     const interval = window.setInterval(async () => {

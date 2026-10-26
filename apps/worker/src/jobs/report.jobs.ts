@@ -52,6 +52,9 @@ async function handleExportReport(job: Job) {
   try {
     const startDate = new Date(dateRange?.startDate || dateRange?.start || exportRecord.startDate);
     const endDate = new Date(dateRange?.endDate || dateRange?.end || exportRecord.endDate);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+      throw new Error('Report export date range is invalid');
+    }
     const report = await buildReport(type, tenantId, startDate, endDate, therapistId);
     const fileData = format === 'pdf'
       ? await renderPdf(report.title, report.headers, report.rows)

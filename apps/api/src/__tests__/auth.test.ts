@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+process.env.JWT_ACCESS_SECRET = 'test-access-secret';
+
 vi.mock('@physiocore/db', () => ({
   prisma: {
     tenant: {
@@ -19,6 +21,13 @@ vi.mock('@physiocore/db', () => ({
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
+    passwordResetToken: {
+      deleteMany: vi.fn(),
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
   Role: {
     SUPER_ADMIN: 'SUPER_ADMIN',
@@ -42,6 +51,7 @@ vi.mock('crypto', () => ({
       }),
     }),
     randomUUID: vi.fn(() => 'mock-uuid-token'),
+    randomBytes: vi.fn(() => ({ toString: () => 'reset-token-value' })),
   },
   createHash: () => ({
     update: () => ({
@@ -49,6 +59,7 @@ vi.mock('crypto', () => ({
     }),
   }),
   randomUUID: vi.fn(() => 'mock-uuid-token'),
+  randomBytes: vi.fn(() => ({ toString: () => 'reset-token-value' })),
 }));
 
 vi.mock('bcrypt', () => ({
@@ -67,20 +78,13 @@ vi.mock('jsonwebtoken', () => ({
   sign: vi.fn(() => 'mock-access-token'),
 }));
 
-vi.mock('../services/reset-token.store', () => ({
-  resetTokenStore: {
-    set: vi.fn(),
-    get: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
-
 import { prisma, Role } from '@physiocore/db';
 import * as authService from '../services/auth.service';
 
 describe('auth.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => callback(prisma as any));
   });
 
   describe('registerTenant', () => {
@@ -317,11 +321,14 @@ describe('auth.service', () => {
   describe('forgotPassword', () => {
     it('should generate reset token for valid email', async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', email: 'user@test.com' } as any);
-      const { resetTokenStore } = await import('../services/reset-token.store');
+      vi.mocked(prisma.passwordResetToken.deleteMany).mockResolvedValue({ count: 0 } as any);
+      vi.mocked(prisma.passwordResetToken.create).mockResolvedValue({ id: 'reset-1' } as any);
 
       await authService.forgotPassword('user@test.com');
 
-      expect(resetTokenStore.set).toHaveBeenCalled();
+      expect(prisma.passwordResetToken.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ userId: 'user-1', tokenHash: expect.any(String), expiresAt: expect.any(Date) }),
+      }));
     });
 
     it('should silently return when email not found', async () => {
@@ -335,9 +342,11 @@ describe('auth.service', () => {
 
   describe('resetPassword', () => {
     it('should reset password with valid token', async () => {
-      const { resetTokenStore } = await import('../services/reset-token.store');
-      vi.mocked(resetTokenStore.get).mockReturnValue({ email: 'user@test.com', expiresAt: new Date(Date.now() + 3600000) });
-      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', email: 'user@test.com' } as any);
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
+        id: 'reset-1',
+        user: { id: 'user-1', email: 'user@test.com', isActive: true },
+      } as any);
+      vi.mocked(prisma.passwordResetToken.updateMany).mockResolvedValue({ count: 1 } as any);
       vi.mocked(prisma.user.update).mockResolvedValue({} as any);
       vi.mocked(bcrypt.hash).mockResolvedValue('new-hashed-password' as never);
 
@@ -348,20 +357,23 @@ describe('auth.service', () => {
           where: { id: 'user-1' },
         }),
       );
-      expect(resetTokenStore.delete).toHaveBeenCalledWith('valid-token');
+      expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: 'reset-1', usedAt: null }),
+      }));
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
     });
 
     it('should throw NotFoundError with invalid token', async () => {
-      const { resetTokenStore } = await import('../services/reset-token.store');
-      vi.mocked(resetTokenStore.get).mockReturnValue(undefined);
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue(null);
 
       await expect(authService.resetPassword('invalid-token', 'newPassword123')).rejects.toThrow('Invalid or expired reset token');
     });
 
-    it('should throw NotFoundError when user no longer exists', async () => {
-      const { resetTokenStore } = await import('../services/reset-token.store');
-      vi.mocked(resetTokenStore.get).mockReturnValue({ email: 'user@test.com', expiresAt: new Date(Date.now() + 3600000) });
-      vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    it('should throw NotFoundError when the reset token belongs to an inactive user', async () => {
+      vi.mocked(prisma.passwordResetToken.findFirst).mockResolvedValue({
+        id: 'reset-1',
+        user: { id: 'user-1', isActive: false },
+      } as any);
 
       await expect(authService.resetPassword('valid-token', 'newPassword123')).rejects.toThrow('Invalid or expired reset token');
     });

@@ -23,7 +23,7 @@ vi.mock('@physiocore/db', () => {
     $executeRaw: vi.fn(),
     $transaction: vi.fn((cb: (p: any) => any) => cb(mockPrisma)),
   };
-  return { prisma: mockPrisma, Role: { SUPER_ADMIN: 'SUPER_ADMIN', ADMIN: 'ADMIN', FRONT_DESK: 'FRONT_DESK', THERAPIST: 'THERAPIST', BILLING: 'BILLING', PATIENT: 'PATIENT' }, AppointmentStatus: { SCHEDULED: 'SCHEDULED', CONFIRMED: 'CONFIRMED', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW', COMPLETED: 'COMPLETED' }, AppointmentType: { INITIAL_ASSESSMENT: 'INITIAL_ASSESSMENT', FOLLOW_UP: 'FOLLOW_UP', MANUAL_THERAPY: 'MANUAL_THERAPY', EXERCISE_PRESCRIPTION: 'EXERCISE_PRESCRIPTION', TELEHEALTH: 'TELEHEALTH', GROUP_SESSION: 'GROUP_SESSION' }, Prisma: { PrismaClientKnownRequestError: class extends Error { constructor(public code: string) { super(); this.name = 'PrismaClientKnownRequestError'; } } } };
+  return { prisma: mockPrisma, Role: { SUPER_ADMIN: 'SUPER_ADMIN', ADMIN: 'ADMIN', FRONT_DESK: 'FRONT_DESK', THERAPIST: 'THERAPIST', BILLING: 'BILLING', PATIENT: 'PATIENT' }, AppointmentStatus: { SCHEDULED: 'SCHEDULED', CONFIRMED: 'CONFIRMED', CHECKED_IN: 'CHECKED_IN', IN_SESSION: 'IN_SESSION', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW', COMPLETED: 'COMPLETED' }, AppointmentType: { INITIAL_ASSESSMENT: 'INITIAL_ASSESSMENT', FOLLOW_UP: 'FOLLOW_UP', MANUAL_THERAPY: 'MANUAL_THERAPY', EXERCISE_PRESCRIPTION: 'EXERCISE_PRESCRIPTION', TELEHEALTH: 'TELEHEALTH', GROUP_SESSION: 'GROUP_SESSION' }, Prisma: { PrismaClientKnownRequestError: class extends Error { constructor(public code: string) { super(); this.name = 'PrismaClientKnownRequestError'; } } } };
 });
 
 vi.mock('bcrypt', () => ({

@@ -304,6 +304,9 @@ export default function ReportsPage() {
 
   useEffect(() => {
     void loadReports();
+    // The first load intentionally uses the initial filter state; later loads
+    // are triggered explicitly by the Apply button.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

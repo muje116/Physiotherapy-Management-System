@@ -120,6 +120,7 @@ async function settle(id: string, transaction: { transactionAmount: number; tran
         status: 'COMPLETED',
         notes: 'Confirmed by OneKhusa request-to-pay polling',
         paymentRequestId: request.id,
+        idempotencyKey: `ONEKHUSA:${request.id}`,
       },
     });
 

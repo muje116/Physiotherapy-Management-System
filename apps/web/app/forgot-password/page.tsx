@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
             </div>
           </div>
           <CardTitle className="text-xl">Reset Password</CardTitle>
-          <CardDescription>Enter your email and we'll send you a reset link</CardDescription>
+          <CardDescription>Enter your email and we&apos;ll send you a reset link</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

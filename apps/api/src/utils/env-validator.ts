@@ -32,9 +32,47 @@ export function validateEnv(): void {
   }
 
   if (process.env.NODE_ENV === 'production') {
-    for (const key of REQUIRED_VARS) {
-      if (process.env[key]?.includes('change-me') || process.env[key]?.includes('dev')) {
-        console.warn(`WARNING: ${key} appears to use a development/default value in production`);
+    const productionRequired = ['FRONTEND_URL', 'REDIS_URL'];
+    const productionMissing = productionRequired.filter((key) => !process.env[key]);
+    if (productionMissing.length > 0) {
+      throw new Error(`Missing production environment variables: ${productionMissing.join(', ')}`);
+    }
+
+    const weakSecrets = REQUIRED_VARS.filter((key) => /change-me|dev|example|password/i.test(process.env[key] || ''));
+    if (weakSecrets.length > 0) {
+      throw new Error(`Production secrets must be replaced for: ${weakSecrets.join(', ')}`);
+    }
+
+    const frontendOrigins = (process.env.FRONTEND_URL || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+    if (frontendOrigins.length === 0) {
+      throw new Error('FRONTEND_URL must contain at least one absolute URL in production');
+    }
+    for (const origin of frontendOrigins) {
+      try {
+        new URL(origin);
+      } catch {
+        throw new Error('Every FRONTEND_URL entry must be a valid absolute URL in production');
+      }
+    }
+
+    try {
+      const redisUrl = new URL(process.env.REDIS_URL as string);
+      if (!['redis:', 'rediss:'].includes(redisUrl.protocol)) throw new Error('unsupported protocol');
+    } catch {
+      throw new Error('REDIS_URL must be a valid redis:// or rediss:// URL in production');
+    }
+
+    if (process.env.ONEKHUSA_ENVIRONMENT === 'PRODUCTION') {
+      const paymentVars = [
+        'ONEKHUSA_API_KEY',
+        'ONEKHUSA_API_SECRET',
+        'ONEKHUSA_ORGANISATION_ID',
+        'ONEKHUSA_MERCHANT_ACCOUNT_NUMBER',
+        'ONEKHUSA_WEBHOOK_SECRET',
+      ];
+      const missingPaymentVars = paymentVars.filter((key) => !process.env[key]);
+      if (missingPaymentVars.length > 0) {
+        throw new Error(`Missing production OneKhusa variables: ${missingPaymentVars.join(', ')}`);
       }
     }
   }

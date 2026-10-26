@@ -6,6 +6,7 @@ import {
   createMedicalSchemeClaimSchema,
   createMedicalSchemeSchema,
   medicalSchemeClaimQuerySchema,
+  medicalSchemeReportQuerySchema,
   updateMedicalSchemeClaimStatusSchema,
   updateMedicalSchemeSchema,
 } from '@physiocore/schema';
@@ -102,7 +103,7 @@ export default async function medicalSchemeRoutes(fastify: FastifyInstance) {
     '/medical-schemes/claims/report',
     { preHandler: [requirePermission('scheme:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const query = request.query as { startDate?: string; endDate?: string };
+      const query = medicalSchemeReportQuerySchema.parse(request.query);
       const report = await medicalSchemeService.getClaimsReport(request.tenantId, query.startDate, query.endDate);
       return reply.send({ success: true, data: report });
     }

@@ -29,6 +29,7 @@ enum AppointmentType {
 enum AppointmentStatus {
   SCHEDULED
   CONFIRMED
+  CHECKED_IN
   IN_SESSION
   COMPLETED
   CANCELLED
@@ -80,6 +81,7 @@ model Tenant {
   assets                Asset[]
   drugInventory         DrugInventory[]
   drugStockMovements    DrugStockMovement[]
+  clinicalObservations  ClinicalObservation[]
   settings              TenantSettings?
 }
 
@@ -104,11 +106,13 @@ model User {
   tenant                Tenant              @relation(fields: [tenantId], references: [id])
   therapist             Therapist?
   refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
   auditLogs             AuditLog[]
   assignedAssets        Asset[]             @relation("AssignedAssets")
   issuedDrugMovements   DrugStockMovement[] @relation("DrugMovementRecorder")
   receivedDrugMovements DrugStockMovement[] @relation("DrugMovementRecipient")
   initiatedPaymentRequests PaymentRequest[] @relation("PaymentRequestInitiator")
+  recordedClinicalObservations ClinicalObservation[] @relation("ClinicalObservationRecorder")
 
   @@unique([tenantId, email])
 }
@@ -121,6 +125,19 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model Therapist {
@@ -168,6 +185,12 @@ model Patient {
   nextOfKinName                     String?
   nextOfKinPhone                    String?
   howHeardAboutClinic               String?
+  allergies                          String[]  @default([])
+  chronicConditions                  String[]  @default([])
+  currentMedications                 String[]  @default([])
+  bloodType                          String?
+  preferredLanguage                  String?
+  clinicalPrecautions                String?
   isActive                          Boolean   @default(true)
   portalUserId                      String?   @unique
   createdAt                         DateTime  @default(now())
@@ -189,6 +212,7 @@ model Patient {
   clientTasks     ClientTask[]
   feedback        PatientFeedback[]
   drugIssues      DrugStockMovement[]
+  clinicalObservations ClinicalObservation[]
 
   @@unique([tenantId, patientCode])
 }
@@ -217,6 +241,9 @@ model Appointment {
   telehealthLink  String?
   notes           String?
   reminderSentAt  DateTime?
+  checkedInAt     DateTime?
+  room            String?
+  queuePriority   String            @default("STANDARD")
   cancelledAt     DateTime?
   cancelledReason String?
   createdAt       DateTime          @default(now())
@@ -227,6 +254,9 @@ model Appointment {
   therapist Therapist @relation(fields: [therapistId], references: [id])
   soapNote  SoapNote?
   invoice   Invoice?
+  clinicalObservations ClinicalObservation[]
+
+  @@index([tenantId, status, checkedInAt])
 }
 
 model ScheduleBlock {
@@ -277,6 +307,34 @@ model SoapNote {
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   patient     Patient     @relation(fields: [patientId], references: [id])
+}
+
+model ClinicalObservation {
+  id               String    @id @default(uuid())
+  tenantId         String
+  patientId        String
+  appointmentId    String?
+  recordedByUserId String
+  recordedAt       DateTime  @default(now())
+  systolicBp       Int?
+  diastolicBp      Int?
+  pulse            Int?
+  respiratoryRate  Int?
+  temperatureC     Decimal?  @db.Decimal(4, 1)
+  oxygenSaturation Int?
+  weightKg         Decimal?  @db.Decimal(6, 2)
+  heightCm         Decimal?  @db.Decimal(5, 2)
+  painScore        Int?
+  notes            String?
+  createdAt        DateTime  @default(now())
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  recordedBy  User         @relation("ClinicalObservationRecorder", fields: [recordedByUserId], references: [id])
+
+  @@index([tenantId, patientId, recordedAt])
+  @@index([tenantId, appointmentId])
 }
 
 model OutcomeMeasure {
@@ -422,6 +480,8 @@ model AuditLog {
   timestamp    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, timestamp])
 }
 
 // ============================================================
@@ -508,7 +568,10 @@ model Payment {
   invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
   paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
   paymentRequestId String? @unique
+  idempotencyKey   String?
   paymentRequest PaymentRequest? @relation("PaymentRequestPayment", fields: [paymentRequestId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
 }
 
 model PaymentRequest {
@@ -528,6 +591,7 @@ model PaymentRequest {
   lastPolledAt               DateTime?
   nextPollAt                 DateTime?
   providerTransactionReference String?
+  providerEventId             String?
   providerPaidAt             DateTime?
   sourceAccountNumber        String?
   sourceInstitution          String?
@@ -546,6 +610,7 @@ model PaymentRequest {
   @@index([tenantId, invoiceId, status])
   @@index([tenantId, status, nextPollAt])
   @@index([patientId, status])
+  @@unique([provider, providerEventId])
 }
 
 model MedicalScheme {

@@ -37,7 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }).catch(() => {
         clearTokens();
         setUserState(null);
-      });
+      }).finally(() => setLoading(false));
+      return;
     }
     setLoading(false);
   }, []);
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    void api.post('/auth/logout', {}).catch(() => undefined);
     clearTokens();
     setUserState(null);
     window.location.href = '/login';

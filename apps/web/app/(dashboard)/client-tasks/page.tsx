@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +58,10 @@ const TASK_TYPE_BADGE: Record<string, 'default' | 'secondary' | 'outline' | 'inf
   ASSESSMENT: 'info',
 };
 
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toISOString().split('T')[0] : '';
+}
+
 export default function ClientTasksPage() {
   const [tasks, setTasks] = useState<ClientTask[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -81,9 +85,7 @@ export default function ClientTasksPage() {
   const [formAutoEmail, setFormAutoEmail] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const formatDate = (value?: string | null) => (value ? new Date(value).toISOString().split('T')[0] : '');
-
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setError(null);
     Promise.all([
@@ -107,9 +109,9 @@ export default function ClientTasksPage() {
       setStats(sRes.data.data || null);
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const resetForm = () => {
     setFormPatientId('');

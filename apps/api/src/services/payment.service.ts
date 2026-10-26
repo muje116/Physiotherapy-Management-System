@@ -22,6 +22,10 @@ export async function listPayments(tenantId: string, query: any) {
 }
 
 export async function recordPayment(tenantId: string, data: any) {
+  if (!Number.isFinite(Number(data.amount)) || Number(data.amount) <= 0) {
+    throw new ValidationError('Payment amount must be greater than zero');
+  }
+
   const [patient, method, invoice] = await Promise.all([
     prisma.patient.findFirst({
       where: { id: data.patientId, tenantId },
@@ -49,7 +53,26 @@ export async function recordPayment(tenantId: string, data: any) {
 
   const methodName = method?.name || data.methodName || 'OTHER';
 
-  return prisma.$transaction(async (tx) => {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (data.idempotencyKey) {
+        const existing = await (tx as any).payment.findFirst({
+          where: { tenantId, idempotencyKey: data.idempotencyKey },
+        });
+        if (existing) return existing;
+      }
+
+      if (data.paymentRequestId) {
+        const paymentRequest = await (tx as any).paymentRequest.findFirst({
+          where: { id: data.paymentRequestId, tenantId },
+          select: { id: true, invoiceId: true, patientId: true },
+        });
+        if (!paymentRequest) throw new NotFoundError('Payment request not found');
+        if (paymentRequest.invoiceId !== data.invoiceId || paymentRequest.patientId !== data.patientId) {
+          throw new ValidationError('Payment request does not match the payment');
+        }
+      }
+
     let paidBefore = 0;
 
     if (invoice) {
@@ -76,6 +99,7 @@ export async function recordPayment(tenantId: string, data: any) {
         status: 'COMPLETED',
         notes: data.notes || null,
         paymentRequestId: data.paymentRequestId || null,
+        idempotencyKey: data.idempotencyKey || null,
       },
     });
 
@@ -86,8 +110,19 @@ export async function recordPayment(tenantId: string, data: any) {
       });
     }
 
-    return payment;
-  });
+      return payment;
+    }, { isolationLevel: 'Serializable' as any });
+  } catch (error: any) {
+    // A concurrent retry can win the unique idempotency constraint. Return
+    // the already-created payment instead of charging the patient twice.
+    if (error?.code === 'P2002' && data.idempotencyKey) {
+      const existing = await prisma.payment.findFirst({
+        where: { tenantId, idempotencyKey: data.idempotencyKey },
+      });
+      if (existing) return existing;
+    }
+    throw error;
+  }
 }
 
 export async function getPaymentSummary(tenantId: string) {

@@ -47,6 +47,7 @@ export async function create(tenantId: string, data: {
   endAt: string;
   type: string;
   isTelehealth?: boolean;
+  room?: string;
   notes?: string;
 }) {
   const startAt = new Date(data.startAt);
@@ -83,6 +84,7 @@ export async function create(tenantId: string, data: {
       endAt,
       type: data.type as AppointmentType,
       isTelehealth: data.isTelehealth || false,
+      room: data.room?.trim() || null,
       notes: data.notes,
     },
     include: {
@@ -143,6 +145,8 @@ export async function update(tenantId: string, appointmentId: string, data: any)
   if (data.endAt !== undefined) updateData.endAt = endAt;
   if (data.type !== undefined) updateData.type = data.type as AppointmentType;
   if (data.status !== undefined) updateData.status = data.status as AppointmentStatus;
+  if (data.room !== undefined) updateData.room = data.room.trim() || null;
+  if (data.queuePriority !== undefined) updateData.queuePriority = data.queuePriority;
   if (data.notes !== undefined) updateData.notes = data.notes;
 
   if (data.status === AppointmentStatus.CANCELLED) {
@@ -182,6 +186,73 @@ export async function confirm(tenantId: string, appointmentId: string) {
   return prisma.appointment.update({
     where: { id: appointmentId },
     data: { status: AppointmentStatus.CONFIRMED },
+  });
+}
+
+export async function checkIn(
+  tenantId: string,
+  appointmentId: string,
+  data: { room?: string; queuePriority: 'STANDARD' | 'URGENT' },
+) {
+  const appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, tenantId } });
+  if (!appointment) throw new NotFoundError('Appointment not found');
+  if ([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW, AppointmentStatus.COMPLETED, AppointmentStatus.IN_SESSION].includes(appointment.status)) {
+    throw new ConflictError('This appointment can no longer be checked in');
+  }
+
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: AppointmentStatus.CHECKED_IN,
+      checkedInAt: appointment.checkedInAt || new Date(),
+      room: data.room?.trim() || null,
+      queuePriority: data.queuePriority,
+    },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true, patientCode: true } },
+      therapist: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+}
+
+export async function startSession(tenantId: string, appointmentId: string) {
+  const appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, tenantId } });
+  if (!appointment) throw new NotFoundError('Appointment not found');
+  if (appointment.status !== AppointmentStatus.CHECKED_IN) {
+    throw new ConflictError('The patient must be checked in before starting a session');
+  }
+
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: { status: AppointmentStatus.IN_SESSION },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true, patientCode: true } },
+      therapist: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+}
+
+function queueDateRange(date?: string) {
+  const dateText = date || new Date().toISOString().slice(0, 10);
+  const start = new Date(`${dateText}T00:00:00.000Z`);
+  const end = new Date(`${dateText}T23:59:59.999Z`);
+  return { start, end };
+}
+
+export async function getQueue(tenantId: string, query: { date?: string; therapistId?: string }) {
+  const dateRange = query.date ? queueDateRange(query.date) : undefined;
+  return prisma.appointment.findMany({
+    where: {
+      tenantId,
+      therapistId: query.therapistId,
+      status: { in: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_SESSION] },
+      ...(dateRange ? { startAt: { gte: dateRange.start, lte: dateRange.end } } : {}),
+    },
+    include: {
+      patient: { select: { id: true, firstName: true, lastName: true, patientCode: true } },
+      therapist: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+    orderBy: [{ queuePriority: 'desc' }, { checkedInAt: 'asc' }],
   });
 }
 

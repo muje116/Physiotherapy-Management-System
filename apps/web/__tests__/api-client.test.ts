@@ -43,13 +43,13 @@ describe('api-client', () => {
   });
 
   describe('setTokens', () => {
-    it('stores both access and refresh tokens', () => {
+    it('stores only the short-lived access token', () => {
       setTokens('access-123', 'refresh-456');
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith('physiocore_access_token', 'access-123');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('physiocore_refresh_token', 'refresh-456');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('physiocore_refresh_token');
       expect(getAccessToken()).toBe('access-123');
-      expect(getRefreshToken()).toBe('refresh-456');
+      expect(getRefreshToken()).toBeNull();
     });
   });
 

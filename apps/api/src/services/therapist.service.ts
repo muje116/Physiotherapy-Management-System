@@ -26,6 +26,9 @@ export async function list(tenantId: string) {
 export async function create(tenantId: string, data: { userId: string; registrationNo?: string; specialties?: string[]; bio?: string; avatarUrl?: string }) {
   const user = await prisma.user.findFirst({ where: { id: data.userId, tenantId } });
   if (!user) throw new NotFoundError('User not found in this tenant');
+  if (user.role !== Role.THERAPIST || !user.isActive) {
+    throw new ValidationError('Only active users with the THERAPIST role can have a therapist profile');
+  }
 
   const existingTherapist = await prisma.therapist.findUnique({ where: { userId: data.userId } });
   if (existingTherapist) throw new ConflictError('User already has a therapist profile');

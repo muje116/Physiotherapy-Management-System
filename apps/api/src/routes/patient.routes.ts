@@ -22,7 +22,7 @@ export default async function patientRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = createPatientSchema.parse(request.body);
       const patient = await patientService.create(request.tenantId, data);
-      auditLog('CREATE', 'PATIENT')(request, reply, { id: patient.id, after: data });
+      auditLog('CREATE', 'PATIENT')(request, reply, { id: patient.id });
       return reply.status(201).send({ success: true, data: patient });
     }
   );
@@ -44,7 +44,7 @@ export default async function patientRoutes(fastify: FastifyInstance) {
       const { patientId } = request.params as { patientId: string };
       const data = updatePatientSchema.parse(request.body);
       const patient = await patientService.update(request.tenantId, patientId, data, request.user.id, request.user.role);
-      auditLog('UPDATE', 'PATIENT')(request, reply, { id: patientId, after: data });
+      auditLog('UPDATE', 'PATIENT')(request, reply, { id: patientId });
       return reply.send({ success: true, data: patient });
     }
   );

@@ -23,7 +23,7 @@ vi.mock('@physiocore/db', () => {
     $executeRaw: vi.fn(),
     $transaction: vi.fn((cb: (p: any) => any) => cb(mockPrisma)),
   };
-  return { prisma: mockPrisma, Role: { SUPER_ADMIN: 'SUPER_ADMIN', ADMIN: 'ADMIN', FRONT_DESK: 'FRONT_DESK', THERAPIST: 'THERAPIST', BILLING: 'BILLING', PATIENT: 'PATIENT' }, AppointmentStatus: { SCHEDULED: 'SCHEDULED', CONFIRMED: 'CONFIRMED', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW', COMPLETED: 'COMPLETED' }, AppointmentType: { INITIAL_ASSESSMENT: 'INITIAL_ASSESSMENT', FOLLOW_UP: 'FOLLOW_UP', MANUAL_THERAPY: 'MANUAL_THERAPY', EXERCISE_PRESCRIPTION: 'EXERCISE_PRESCRIPTION', TELEHEALTH: 'TELEHEALTH', GROUP_SESSION: 'GROUP_SESSION' }, Prisma: { PrismaClientKnownRequestError: class extends Error { constructor(public code: string) { super(); this.name = 'PrismaClientKnownRequestError'; } } } };
+  return { prisma: mockPrisma, Role: { SUPER_ADMIN: 'SUPER_ADMIN', ADMIN: 'ADMIN', FRONT_DESK: 'FRONT_DESK', THERAPIST: 'THERAPIST', BILLING: 'BILLING', PATIENT: 'PATIENT' }, AppointmentStatus: { SCHEDULED: 'SCHEDULED', CONFIRMED: 'CONFIRMED', CHECKED_IN: 'CHECKED_IN', IN_SESSION: 'IN_SESSION', CANCELLED: 'CANCELLED', NO_SHOW: 'NO_SHOW', COMPLETED: 'COMPLETED' }, AppointmentType: { INITIAL_ASSESSMENT: 'INITIAL_ASSESSMENT', FOLLOW_UP: 'FOLLOW_UP', MANUAL_THERAPY: 'MANUAL_THERAPY', EXERCISE_PRESCRIPTION: 'EXERCISE_PRESCRIPTION', TELEHEALTH: 'TELEHEALTH', GROUP_SESSION: 'GROUP_SESSION' }, Prisma: { PrismaClientKnownRequestError: class extends Error { constructor(public code: string) { super(); this.name = 'PrismaClientKnownRequestError'; } } } };
 });
 
 vi.mock('bcrypt', () => ({
@@ -199,6 +199,36 @@ describe('Appointment Flow Integration', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('check-in queue', () => {
+    it('checks in a patient with a room and urgency', async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(mockAppointment as any);
+      vi.mocked(prisma.appointment.update).mockResolvedValue({ ...mockAppointment, status: AppointmentStatus.CHECKED_IN } as any);
+
+      const res = await supertest(app.server)
+        .post('/api/v1/appointments/apt-1/check-in')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ room: 'Room 2', queuePriority: 'URGENT' });
+
+      expect(res.status).toBe(200);
+      expect(prisma.appointment.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: AppointmentStatus.CHECKED_IN, room: 'Room 2', queuePriority: 'URGENT' }),
+      }));
+    });
+
+    it('lists checked-in and in-session patients in the live queue', async () => {
+      vi.mocked(prisma.appointment.findMany).mockResolvedValue([mockAppointment] as any);
+
+      const res = await supertest(app.server)
+        .get('/api/v1/appointments/queue')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(prisma.appointment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ status: { in: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_SESSION] } }),
+      }));
     });
   });
 

@@ -29,6 +29,12 @@ export const createPatientSchema = z.object({
   nextOfKinName: z.string().max(100).optional(),
   nextOfKinPhone: z.string().max(50).optional(),
   howHeardAboutClinic: z.string().max(150).optional(),
+  allergies: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  chronicConditions: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  currentMedications: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  bloodType: z.string().trim().max(20).optional(),
+  preferredLanguage: z.string().trim().max(100).optional(),
+  clinicalPrecautions: z.string().max(4000).optional(),
 });
 
 export const updatePatientSchema = createPatientSchema.partial();

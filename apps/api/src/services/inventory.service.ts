@@ -102,13 +102,25 @@ export async function listDrugs(tenantId: string, query: any) {
     ];
   }
 
-  const allItems = await prisma.drugInventory.findMany({
-    where,
-    orderBy: [{ expiryDate: 'asc' }, { name: 'asc' }],
-  });
-  const filteredItems = query.lowStockOnly
-    ? allItems.filter((item) => item.quantityOnHand <= item.reorderLevel)
-    : allItems;
+  // Prisma cannot compare two columns in a normal filter, so keep the
+  // low-stock comparison in SQL and only page in memory for that optional
+  // filter. The default path is fully database-paginated.
+  if (!query.lowStockOnly) {
+    const [items, total] = await Promise.all([
+      prisma.drugInventory.findMany({
+        where,
+        orderBy: [{ expiryDate: 'asc' }, { name: 'asc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.drugInventory.count({ where }),
+    ]);
+    return { items, total, page: query.page, limit: query.limit };
+  }
+
+  delete where.quantityOnHand;
+  const allItems = await prisma.drugInventory.findMany({ where, orderBy: [{ expiryDate: 'asc' }, { name: 'asc' }] });
+  const filteredItems = allItems.filter((item) => item.quantityOnHand <= item.reorderLevel);
   const start = (query.page - 1) * query.limit;
 
   return {
@@ -123,15 +135,23 @@ export async function getInventorySummary(tenantId: string) {
   const now = new Date();
   const expiryCutoff = new Date(now);
   expiryCutoff.setDate(expiryCutoff.getDate() + 30);
-  const drugs = await prisma.drugInventory.findMany({ where: { tenantId, isActive: true } });
+  const baseWhere = { tenantId, isActive: true };
+  const [drugCount, totals, stockLevels, expiringSoonCount, expiredCount, assetCount] = await Promise.all([
+    prisma.drugInventory.count({ where: baseWhere }),
+    prisma.drugInventory.aggregate({ where: baseWhere, _sum: { quantityOnHand: true } }),
+    prisma.drugInventory.findMany({ where: baseWhere, select: { quantityOnHand: true, reorderLevel: true } }),
+    prisma.drugInventory.count({ where: { ...baseWhere, expiryDate: { gte: now, lte: expiryCutoff } } }),
+    prisma.drugInventory.count({ where: { ...baseWhere, expiryDate: { lt: now } } }),
+    prisma.asset.count({ where: { tenantId, status: { not: 'RETIRED' } } }),
+  ]);
 
   return {
-    drugCount: drugs.length,
-    totalUnits: drugs.reduce((sum, drug) => sum + drug.quantityOnHand, 0),
-    lowStockCount: drugs.filter((drug) => drug.quantityOnHand <= drug.reorderLevel).length,
-    expiringSoonCount: drugs.filter((drug) => drug.expiryDate && drug.expiryDate <= expiryCutoff).length,
-    expiredCount: drugs.filter((drug) => drug.expiryDate && drug.expiryDate < now).length,
-    assetCount: await prisma.asset.count({ where: { tenantId, status: { not: 'RETIRED' } } }),
+    drugCount,
+    totalUnits: totals._sum.quantityOnHand || 0,
+    lowStockCount: stockLevels.filter((drug) => drug.quantityOnHand <= drug.reorderLevel).length,
+    expiringSoonCount,
+    expiredCount,
+    assetCount,
   };
 }
 
@@ -215,9 +235,16 @@ export async function receiveDrugStock(tenantId: string, drugId: string, userId:
 }
 
 export async function issueDrug(tenantId: string, drugId: string, userId: string, data: any) {
+  if (!!data.patientId === !!data.recipientUserId) {
+    throw new ValidationError('Specify exactly one patient or employee recipient');
+  }
+
   return prisma.$transaction(async (tx) => {
     const drug = await tx.drugInventory.findFirst({ where: { id: drugId, tenantId, isActive: true } });
     if (!drug) throw new NotFoundError('Drug inventory item not found or inactive');
+    if (drug.expiryDate && drug.expiryDate <= new Date()) {
+      throw new ValidationError('Cannot issue expired stock');
+    }
 
     if (data.patientId) {
       const patient = await tx.patient.findFirst({ where: { id: data.patientId, tenantId } });

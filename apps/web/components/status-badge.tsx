@@ -7,6 +7,7 @@ const STATUS_COLORS: Record<string, 'success' | 'warning' | 'info' | 'destructiv
   INACTIVE: 'neutral',
   SCHEDULED: 'info',
   CONFIRMED: 'success',
+  CHECKED_IN: 'warning',
   IN_SESSION: 'warning',
   COMPLETED: 'neutral',
   CANCELLED: 'cancelled',

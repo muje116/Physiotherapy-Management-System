@@ -1,6 +1,12 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '@physiocore/db';
 
+type PendingAudit = {
+  action: string;
+  resourceType: string;
+  payload?: any;
+};
+
 function redactSensitive(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactSensitive);
   if (!value || typeof value !== 'object') return value;
@@ -12,9 +18,30 @@ function redactSensitive(value: unknown): unknown {
 }
 
 export const auditLog = (action: string, resourceType: string) => {
-  return async (request: FastifyRequest, _reply: FastifyReply, payload: any) => {
-    await prisma.auditLog.create({
-      data: {
+  return (request: FastifyRequest, _reply: FastifyReply, payload: any) => {
+    const requestWithAudits = request as FastifyRequest & { pendingAuditLogs?: PendingAudit[] };
+    requestWithAudits.pendingAuditLogs ||= [];
+    requestWithAudits.pendingAuditLogs.push({ action, resourceType, payload });
+  };
+};
+
+export async function onResponseAuditHook(request: FastifyRequest, reply: FastifyReply) {
+  if (!request.user?.id || !request.tenantId) return;
+
+  const requestWithAudits = request as FastifyRequest & { pendingAuditLogs?: PendingAudit[] };
+  const entries = requestWithAudits.pendingAuditLogs || [];
+  if (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+    entries.push({
+      action: `${request.method}_${request.routeOptions.url || request.url.split('?')[0]}`,
+      resourceType: request.method === 'GET' ? 'HTTP_READ' : 'HTTP',
+    });
+  }
+
+  if (entries.length === 0) return;
+
+  try {
+    await prisma.auditLog.createMany({
+      data: entries.map(({ action, resourceType, payload }) => ({
         tenantId: request.tenantId,
         userId: request.user.id,
         action,
@@ -24,29 +51,9 @@ export const auditLog = (action: string, resourceType: string) => {
         after: redactSensitive(payload?.after) as any,
         ip: request.ip,
         userAgent: request.headers['user-agent'] || null,
-      },
+      })),
     });
-  };
-};
-
-export async function onResponseAuditHook(request: FastifyRequest, reply: FastifyReply) {
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && request.user?.id) {
-    try {
-      await prisma.auditLog.create({
-        data: {
-          tenantId: request.tenantId || '',
-          userId: request.user.id,
-          action: `${request.method}_${request.url}`,
-          resourceType: 'HTTP',
-          resourceId: undefined,
-          before: undefined,
-          after: undefined,
-          ip: request.ip,
-          userAgent: request.headers['user-agent'] || null,
-        },
-      });
-    } catch (err) {
-      request.log.error({ err }, 'Audit log hook failed');
-    }
+  } catch (err) {
+    request.log.error({ err, statusCode: reply.statusCode }, 'Audit log hook failed');
   }
 }

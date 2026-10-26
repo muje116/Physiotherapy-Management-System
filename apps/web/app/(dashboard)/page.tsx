@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Today's Appointments</CardTitle>
+          <CardTitle className="text-base">Today&apos;s Appointments</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

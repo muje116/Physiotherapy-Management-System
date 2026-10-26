@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 interface AvatarContextValue {
@@ -30,7 +31,7 @@ function Avatar({ src, alt, fallback, size = 'md', className }: AvatarProps) {
     <AvatarContext.Provider value={{ size }}>
       <div className={cn('relative inline-flex items-center justify-center rounded-full bg-muted overflow-hidden', sizeClasses[size], className)}>
         {src && !imgError ? (
-          <img src={src} alt={alt || ''} className="h-full w-full object-cover" onError={() => setImgError(true)} />
+          <Image src={src} alt={alt || ''} fill sizes="48px" unoptimized className="object-cover" onError={() => setImgError(true)} />
         ) : (
           <span className="font-medium text-muted-foreground">{fallback || alt?.charAt(0) || '?'}</span>
         )}
@@ -40,7 +41,7 @@ function Avatar({ src, alt, fallback, size = 'md', className }: AvatarProps) {
 }
 
 function AvatarImage({ src, alt }: { src: string; alt?: string }) {
-  return <img src={src} alt={alt || ''} className="h-full w-full object-cover" />;
+  return <Image src={src} alt={alt || ''} fill sizes="48px" unoptimized className="object-cover" />;
 }
 
 function AvatarFallback({ children, className }: { children: React.ReactNode; className?: string }) {

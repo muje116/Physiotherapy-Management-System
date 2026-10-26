@@ -9,7 +9,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "push": "prisma db push",
-    "seed": "set DATABASE_URL=postgresql://postgres:1234@localhost:5432/physiocore?schema=public && tsx prisma/seed.ts",
+    "seed": "tsx prisma/seed.ts",
     "studio": "prisma studio",
     "build": "tsc",
     "dev": "tsc --watch"

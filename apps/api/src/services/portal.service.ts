@@ -1,7 +1,6 @@
 import { prisma, AppointmentStatus } from '@physiocore/db';
 import { NotFoundError, ForbiddenError } from '../utils/errors';
-import { recordPayment } from './payment.service';
-import { listPatientPaymentRequests } from './payment-request.service';
+import { createPaymentRequest, listPatientPaymentRequests } from './payment-request.service';
 
 export async function getProfile(userId: string) {
   const patient = await prisma.patient.findUnique({
@@ -57,8 +56,8 @@ export async function getInvoices(patientId: string) {
   });
 }
 
-export async function getPaymentRequests(patientId: string) {
-  return listPatientPaymentRequests(patientId);
+export async function getPaymentRequests(tenantId: string, patientId: string) {
+  return listPatientPaymentRequests(tenantId, patientId);
 }
 
 export async function getExercisePlans(patientId: string) {
@@ -76,9 +75,9 @@ export async function getSoapNotes(patientId: string) {
   });
 }
 
-export async function payInvoice(patientId: string, invoiceId: string) {
+export async function payInvoice(tenantId: string, patientId: string, invoiceId: string, requestedById: string) {
   const invoice = await prisma.invoice.findFirst({
-    where: { id: invoiceId, patientId },
+    where: { id: invoiceId, patientId, tenantId },
   });
 
   if (!invoice) throw new NotFoundError('Invoice not found');
@@ -86,22 +85,7 @@ export async function payInvoice(patientId: string, invoiceId: string) {
     throw new ForbiddenError('Invoice is already paid');
   }
 
-  const totalPaid = await prisma.payment.aggregate({
-    where: { tenantId: invoice.tenantId, invoiceId, patientId, status: 'COMPLETED' },
-    _sum: { amount: true },
-  });
-  const outstanding = Math.max(Number(invoice.total) - Number(totalPaid._sum.amount || 0), 0);
-
-  if (outstanding <= 0) throw new ForbiddenError('Invoice is already paid');
-
-  await recordPayment(invoice.tenantId, {
-    patientId,
-    invoiceId,
-    amount: outstanding,
-    methodName: 'PORTAL',
-  });
-
-  return prisma.invoice.findFirst({ where: { id: invoiceId, patientId } });
+  return createPaymentRequest(invoice.tenantId, requestedById, { invoiceId });
 }
 
 export async function submitFeedback(tenantId: string, patientId: string, data: { rating: number; comment?: string }) {

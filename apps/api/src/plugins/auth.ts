@@ -5,8 +5,14 @@ import { JwtPayload, AuthenticatedUser } from '../types';
 import { UnauthorizedError } from '../utils/errors';
 
 const PUBLIC_ROUTES = [
+  'GET /',
+  'GET /live',
+  'GET /ready',
+  'GET /health',
   'POST /api/v1/auth/register-tenant',
   'POST /api/v1/auth/login',
+  'POST /api/v1/auth/refresh',
+  'POST /api/v1/auth/logout',
   'POST /api/v1/auth/forgot-password',
   'POST /api/v1/auth/reset-password',
   'POST /api/v1/payments/onekhusa/webhook',
@@ -14,7 +20,7 @@ const PUBLIC_ROUTES = [
 ];
 
 function isPublicRoute(method: string, url: string): boolean {
-  const routeKey = `${method} ${url}`;
+  const routeKey = `${method} ${url.split('?')[0]}`;
   if (PUBLIC_ROUTES.includes(routeKey)) return true;
   if (url.startsWith('/docs/') && method === 'GET') return true;
   return false;
@@ -35,7 +41,9 @@ export function setupAuth(fastify: FastifyInstance) {
     const token = authHeader.substring(7);
     let payload: JwtPayload;
     try {
-      payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET || 'access-secret-dev') as JwtPayload;
+      const secret = process.env.JWT_ACCESS_SECRET;
+      if (!secret) throw new Error('JWT_ACCESS_SECRET is not configured');
+      payload = jwt.verify(token, secret) as JwtPayload;
     } catch {
       throw new UnauthorizedError('Invalid or expired token');
     }

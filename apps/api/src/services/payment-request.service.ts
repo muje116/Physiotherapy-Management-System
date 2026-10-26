@@ -24,6 +24,7 @@ type SettlementDetails = {
   sourceAccountNumber?: string;
   sourceInstitution?: string;
   metadata?: unknown;
+  providerEventId?: string;
 };
 
 function providerErrorMessage(result: { errorMessage?: string; errorObject?: string }) {
@@ -261,9 +262,9 @@ export async function getPaymentRequest(tenantId: string, id: string) {
   return serialiseRequest(request);
 }
 
-export async function listPatientPaymentRequests(patientId: string) {
+export async function listPatientPaymentRequests(tenantId: string, patientId: string) {
   const requests = await prisma.paymentRequest.findMany({
-    where: { patientId },
+    where: { tenantId, patientId },
     include: requestInclude,
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -295,6 +296,7 @@ async function reversePaymentRequest(requestId: string, details: SettlementDetai
       data: {
         status: 'REVERSED',
         providerTransactionReference: details.transactionReference || request.providerTransactionReference,
+        providerEventId: details.providerEventId || request.providerEventId,
         failureReason: 'Payment was reversed by OneKhusa',
         metadata: details.metadata as any,
       },
@@ -332,6 +334,7 @@ export async function settlePaymentRequest(requestId: string, details: Settlemen
       reference: details.transactionReference || request.providerReference,
       notes: 'Confirmed by OneKhusa request-to-pay',
       paymentRequestId: request.id,
+      idempotencyKey: `ONEKHUSA:${request.id}`,
     });
   } catch (error) {
     const alreadySettled = await prisma.paymentRequest.findUnique({ where: { id: request.id }, include: { payment: true } });
@@ -343,6 +346,7 @@ export async function settlePaymentRequest(requestId: string, details: Settlemen
     data: {
       status: 'PAID',
       providerTransactionReference: details.transactionReference || request.providerTransactionReference,
+      providerEventId: details.providerEventId || request.providerEventId,
       providerPaidAt: details.paidAt || new Date(),
       sourceAccountNumber: details.sourceAccountNumber || request.sourceAccountNumber,
       sourceInstitution: details.sourceInstitution || request.sourceInstitution,
@@ -435,6 +439,7 @@ export async function handleWebhook(event: string | undefined, rawBody: string, 
   const timedAccountNumber = payload.metaData?.timedAccountNumber || payload.beneficiaryAccountNumber;
   const request = await prisma.paymentRequest.findFirst({
     where: {
+      provider: 'ONEKHUSA',
       OR: [
         ...(providerReference ? [{ providerReference }] : []),
         ...(timedAccountNumber ? [{ timedAccountNumber }] : []),
@@ -444,7 +449,11 @@ export async function handleWebhook(event: string | undefined, rawBody: string, 
   if (!request) return { matched: false, ignored: false };
 
   if (event === 'payrequest.reversed') {
-    return { matched: true, request: await reversePaymentRequest(request.id, { transactionReference: payload.transactionReferenceNumber, metadata: payload }) };
+    return { matched: true, request: await reversePaymentRequest(request.id, {
+      transactionReference: payload.transactionReferenceNumber,
+      providerEventId: payload.transactionReferenceNumber ? `${event}:${payload.transactionReferenceNumber}` : undefined,
+      metadata: payload,
+    }) };
   }
 
   const transactionDate = payload.transactionDate ? new Date(payload.transactionDate) : new Date();
@@ -453,6 +462,7 @@ export async function handleWebhook(event: string | undefined, rawBody: string, 
     request: await settlePaymentRequest(request.id, {
       amount: payload.transactionAmount,
       transactionReference: payload.transactionReferenceNumber,
+      providerEventId: payload.transactionReferenceNumber ? `${event}:${payload.transactionReferenceNumber}` : undefined,
       paidAt: Number.isNaN(transactionDate.getTime()) ? new Date() : transactionDate,
       sourceAccountNumber: payload.sourceAccountNumber,
       sourceInstitution: payload.sourceInstitution,

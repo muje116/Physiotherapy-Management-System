@@ -84,54 +84,63 @@ export async function createClaim(tenantId: string, data: { invoiceId?: string; 
 }
 
 export async function submitClaim(tenantId: string, id: string) {
-  const existingClaim = await prisma.schemeClaim.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
-  if (!existingClaim) throw new NotFoundError('Medical scheme claim not found');
-  if (!['DRAFT', 'REJECTED'].includes(existingClaim.status)) {
-    throw new ValidationError(`Cannot submit a claim from ${existingClaim.status} status`);
-  }
+  return prisma.$transaction(async (tx) => {
+    const existingClaim = await tx.schemeClaim.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
+    if (!existingClaim) throw new NotFoundError('Medical scheme claim not found');
+    if (!['DRAFT', 'REJECTED'].includes(existingClaim.status)) {
+      throw new ValidationError(`Cannot submit a claim from ${existingClaim.status} status`);
+    }
 
-  const claim = await prisma.schemeClaim.update({
-    where: { id, tenantId },
-    data: { status: 'SUBMITTED', submittedAt: new Date() },
+    const claim = await tx.schemeClaim.update({
+      where: { id, tenantId },
+      data: { status: 'SUBMITTED', submittedAt: new Date() },
+    });
+    if (claim.invoiceId) {
+      await tx.invoice.update({ where: { id: claim.invoiceId }, data: { status: 'SUBMITTED_TO_MEDICAL_AID' } });
+    }
+    return claim;
   });
-  if (claim.invoiceId) {
-    const invoice = await prisma.invoice.findFirst({ where: { id: claim.invoiceId, tenantId }, select: { id: true } });
-    if (invoice) await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'SUBMITTED_TO_MEDICAL_AID' } });
-  }
-  return claim;
 }
 
 export async function updateClaimStatus(tenantId: string, id: string, status: string, rejectionReason?: string) {
-  const existingClaim = await prisma.schemeClaim.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
-  if (!existingClaim) throw new NotFoundError('Medical scheme claim not found');
-  if (existingClaim.status !== status && !claimTransitions[existingClaim.status]?.includes(status)) {
-    throw new ValidationError(`Cannot move a claim from ${existingClaim.status} to ${status}`);
-  }
-
-  const update: any = { status };
-  if (status === 'APPROVED' || status === 'PAID') update.responseAt = new Date();
-  if (status === 'PAID') update.paidAt = new Date();
-  if (rejectionReason) update.rejectionReason = rejectionReason;
-
-  const claim = await prisma.schemeClaim.update({ where: { id, tenantId }, data: update });
-
-  if (claim.invoiceId) {
-    const invoiceStatus = status === 'APPROVED' ? 'MEDICAL_AID_APPROVED'
-      : status === 'PAID' ? 'PAID'
-      : status === 'REJECTED' ? 'MEDICAL_AID_REJECTED'
-      : undefined;
-    if (invoiceStatus) {
-      const invoice = await prisma.invoice.findFirst({ where: { id: claim.invoiceId, tenantId }, select: { id: true } });
-      if (invoice) await prisma.invoice.update({ where: { id: invoice.id }, data: { status: invoiceStatus } });
+  return prisma.$transaction(async (tx) => {
+    const existingClaim = await tx.schemeClaim.findFirst({ where: { id, tenantId }, select: { id: true, status: true } });
+    if (!existingClaim) throw new NotFoundError('Medical scheme claim not found');
+    if (existingClaim.status !== status && !claimTransitions[existingClaim.status]?.includes(status)) {
+      throw new ValidationError(`Cannot move a claim from ${existingClaim.status} to ${status}`);
     }
-  }
-  return claim;
+
+    const update: any = { status };
+    if (status === 'APPROVED' || status === 'PAID') update.responseAt = new Date();
+    if (status === 'PAID') update.paidAt = new Date();
+    if (rejectionReason) update.rejectionReason = rejectionReason;
+
+    const claim = await tx.schemeClaim.update({ where: { id, tenantId }, data: update });
+
+    if (claim.invoiceId) {
+      const invoiceStatus = status === 'APPROVED' ? 'MEDICAL_AID_APPROVED'
+        : status === 'PAID' ? 'PAID'
+        : status === 'REJECTED' ? 'MEDICAL_AID_REJECTED'
+        : undefined;
+      if (invoiceStatus) {
+        await tx.invoice.update({ where: { id: claim.invoiceId }, data: { status: invoiceStatus } });
+      }
+    }
+    return claim;
+  });
 }
 
 export async function getClaimsReport(tenantId: string, startDate?: string, endDate?: string) {
   const where: any = { tenantId };
   if (startDate && endDate) {
-    where.createdAt = { gte: new Date(startDate), lte: new Date(endDate) };
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      throw new ValidationError('Claim report end date must be after the start date');
+    }
+    where.submittedAt = { gte: start, lte: end };
+  } else if (startDate || endDate) {
+    throw new ValidationError('Claim reports require both startDate and endDate');
   }
 
   const claims = await prisma.schemeClaim.findMany({

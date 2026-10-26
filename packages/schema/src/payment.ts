@@ -13,6 +13,7 @@ export const recordPaymentSchema = z.object({
   methodName: z.string().trim().min(1).max(100).optional(),
   reference: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(1000).optional(),
+  idempotencyKey: z.string().trim().min(8).max(120).optional(),
 });
 
 export const paymentQuerySchema = z.object({

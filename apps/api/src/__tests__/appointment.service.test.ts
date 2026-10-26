@@ -25,6 +25,8 @@ vi.mock('@physiocore/db', () => ({
   AppointmentStatus: {
     SCHEDULED: 'SCHEDULED',
     CONFIRMED: 'CONFIRMED',
+    CHECKED_IN: 'CHECKED_IN',
+    IN_SESSION: 'IN_SESSION',
     CANCELLED: 'CANCELLED',
     NO_SHOW: 'NO_SHOW',
     COMPLETED: 'COMPLETED',
@@ -285,6 +287,67 @@ describe('appointment.service', () => {
       vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
 
       await expect(appointmentService.confirm(tenantId, 'apt-999')).rejects.toThrow('Appointment not found');
+    });
+  });
+
+  describe('checkIn', () => {
+    it('records the arrival time, room, and priority', async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(mockAppointment as any);
+      vi.mocked(prisma.appointment.update).mockResolvedValue({ ...mockAppointment, status: AppointmentStatus.CHECKED_IN } as any);
+
+      await appointmentService.checkIn(tenantId, 'apt-1', { room: ' Room 2 ', queuePriority: 'URGENT' });
+
+      expect(prisma.appointment.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          status: AppointmentStatus.CHECKED_IN,
+          checkedInAt: expect.any(Date),
+          room: 'Room 2',
+          queuePriority: 'URGENT',
+        }),
+      }));
+    });
+
+    it('does not allow an active session to be checked in again', async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue({ ...mockAppointment, status: AppointmentStatus.IN_SESSION } as any);
+
+      await expect(appointmentService.checkIn(tenantId, 'apt-1', { queuePriority: 'STANDARD' }))
+        .rejects.toThrow(ConflictError);
+      expect(prisma.appointment.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('startSession', () => {
+    it('only starts a checked-in appointment', async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue({ ...mockAppointment, status: AppointmentStatus.CHECKED_IN } as any);
+      vi.mocked(prisma.appointment.update).mockResolvedValue({ ...mockAppointment, status: AppointmentStatus.IN_SESSION } as any);
+
+      await appointmentService.startSession(tenantId, 'apt-1');
+
+      expect(prisma.appointment.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { status: AppointmentStatus.IN_SESSION },
+      }));
+    });
+
+    it('rejects starting before check-in', async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(mockAppointment as any);
+
+      await expect(appointmentService.startSession(tenantId, 'apt-1')).rejects.toThrow(ConflictError);
+    });
+  });
+
+  describe('getQueue', () => {
+    it('returns active queue entries ordered by urgency and check-in time', async () => {
+      vi.mocked(prisma.appointment.findMany).mockResolvedValue([]);
+
+      await appointmentService.getQueue(tenantId, {});
+
+      expect(prisma.appointment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId,
+          status: { in: [AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_SESSION] },
+        }),
+        orderBy: [{ queuePriority: 'desc' }, { checkedInAt: 'asc' }],
+      }));
     });
   });
 

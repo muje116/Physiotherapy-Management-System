@@ -4,6 +4,7 @@ vi.mock('@physiocore/db', () => ({
   prisma: {
     payment: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
       aggregate: vi.fn(),
@@ -105,6 +106,18 @@ describe('payment.service', () => {
           data: expect.objectContaining({ tenantId, status: 'COMPLETED' }),
         }),
       );
+    });
+
+    it('returns the existing payment for a repeated idempotency key', async () => {
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue({ id: 'patient-1' } as any);
+      vi.mocked(prisma.paymentMethod.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.invoice.findFirst).mockResolvedValue({ id: 'inv-1', patientId: 'patient-1', total: 500, status: 'UNPAID' } as any);
+      vi.mocked(prisma.payment.findFirst).mockResolvedValue({ id: 'pay-existing', status: 'COMPLETED' } as any);
+
+      const result = await paymentService.recordPayment(tenantId, { ...baseData, idempotencyKey: 'checkout-1234' });
+
+      expect(result.id).toBe('pay-existing');
+      expect(prisma.payment.create).not.toHaveBeenCalled();
     });
 
     it('should update invoice to PAID when fully paid', async () => {

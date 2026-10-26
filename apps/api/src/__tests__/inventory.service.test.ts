@@ -95,4 +95,18 @@ describe('inventory.service', () => {
       recipientUserId: 'employee-1',
     })).rejects.toThrow('Employee recipient not found or inactive');
   });
+
+  it('rejects expired medication before decrementing stock', async () => {
+    vi.mocked(prisma.drugInventory.findFirst).mockResolvedValue({
+      ...drug,
+      expiryDate: new Date(Date.now() - 60_000),
+    } as any);
+
+    await expect(inventoryService.issueDrug(tenantId, 'drug-1', 'user-1', {
+      quantity: 1,
+      patientId: 'patient-1',
+    })).rejects.toThrow('Cannot issue expired stock');
+
+    expect(prisma.drugInventory.updateMany).not.toHaveBeenCalled();
+  });
 });

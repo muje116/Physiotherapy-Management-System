@@ -20,10 +20,12 @@ vi.mock('@physiocore/db', () => ({
     invoice: {
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     patient: {
       findFirst: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -36,6 +38,7 @@ describe('medical-scheme.service', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => callback(prisma as any));
     vi.mocked(prisma.medicalScheme.findFirst).mockResolvedValue(mockScheme as any);
     vi.mocked(prisma.patient.findFirst).mockResolvedValue({ id: 'patient-1' } as any);
     vi.mocked(prisma.invoice.findFirst).mockResolvedValue({ id: 'inv-1', patientId: 'patient-1' } as any);

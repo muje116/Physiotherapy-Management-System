@@ -6,6 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/a
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
@@ -23,9 +24,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = getRefreshToken();
-      if (refreshToken) {
+      if (refreshToken || typeof window !== 'undefined') {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, refreshToken ? { refreshToken } : {}, { withCredentials: true });
           setTokens(res.data.data.accessToken, res.data.data.refreshToken);
           originalRequest.headers.Authorization = `Bearer ${res.data.data.accessToken}`;
           return api(originalRequest);

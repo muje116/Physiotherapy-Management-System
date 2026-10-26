@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '9'
+  PNPM_VERSION: '9.15.5'
 
 jobs:
   lint:
@@ -24,7 +24,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r run lint || echo "Lint not configured for all packages"
+      - run: pnpm -r --if-present run lint
 
   typecheck:
     name: Type Check
@@ -100,6 +100,15 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/physiocore_test
           JWT_ACCESS_SECRET: test-access-secret
           JWT_REFRESH_SECRET: test-refresh-secret
+      - name: Run integration tests
+        run: pnpm --filter @physiocore/api test:integration
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/physiocore_test
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+          REDIS_URL: redis://localhost:6379
+      - name: Run worker tests
+        run: pnpm --filter @physiocore/worker test
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -136,6 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build API image
-        run: docker build -t physiocore-api ./apps/api
+        run: docker build -f apps/api/Dockerfile -t physiocore-api .
       - name: Build Worker image
-        run: docker build -t physiocore-worker ./apps/worker
+        run: docker build -f apps/worker/Dockerfile -t physiocore-worker .
+      - name: Build Web image
+        run: docker build -f apps/web/Dockerfile -t physiocore-web .

@@ -22,6 +22,28 @@ export const medicalSchemeClaimQuerySchema = z.object({
   patientId: recordIdSchema.optional(),
 });
 
+export const medicalSchemeReportQuerySchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+}).superRefine((value, context) => {
+  if (Boolean(value.startDate) !== Boolean(value.endDate)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'startDate and endDate must be provided together',
+      path: ['endDate'],
+    });
+    return;
+  }
+
+  if (value.startDate && value.endDate && new Date(value.startDate) > new Date(value.endDate)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'startDate must be before or equal to endDate',
+      path: ['endDate'],
+    });
+  }
+});
+
 export const createMedicalSchemeClaimSchema = z.object({
   invoiceId: recordIdSchema.optional(),
   patientId: recordIdSchema,
@@ -39,4 +61,5 @@ export const updateMedicalSchemeClaimStatusSchema = z.object({
 export type CreateMedicalSchemeInput = z.infer<typeof createMedicalSchemeSchema>;
 export type UpdateMedicalSchemeInput = z.infer<typeof updateMedicalSchemeSchema>;
 export type MedicalSchemeClaimQueryInput = z.infer<typeof medicalSchemeClaimQuerySchema>;
+export type MedicalSchemeReportQueryInput = z.infer<typeof medicalSchemeReportQuerySchema>;
 export type CreateMedicalSchemeClaimInput = z.infer<typeof createMedicalSchemeClaimSchema>;

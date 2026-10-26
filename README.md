@@ -20,11 +20,11 @@ physiocore/
 
 ### Tenancy
 
-Row-level security on PostgreSQL. Every tenant-scoped table has a `tenantId` column. Prisma middleware sets `app.current_tenant_id` session variable per request. RLS policies enforce isolation at the database level.
+Every tenant-scoped table has a `tenantId` column and every service query requires an explicit tenant predicate. The old transaction-local PostgreSQL RLS hook has been disabled because Prisma's pooled connections are not pinned to Fastify requests; cross-tenant integration tests are required before re-enabling RLS with a transaction-bound data-access layer.
 
 ### Auth
 
-JWT access token (15 min) + refresh token (7 days, hashed in DB). Roles: `SUPER_ADMIN`, `ADMIN`, `FRONT_DESK`, `THERAPIST`, `BILLING`, `PATIENT`. RBAC with resource-level guards via `requirePermission()` preHandler hook.
+JWT access token (15 min) plus a 7-day refresh token hashed in DB and delivered to browsers through an httpOnly cookie. Roles: `SUPER_ADMIN`, `ADMIN`, `FRONT_DESK`, `THERAPIST`, `BILLING`, `PATIENT`. RBAC with resource-level guards via `requirePermission()` preHandler hook.
 
 ## Quick Start
 
@@ -131,8 +131,11 @@ All routes under `/api/v1`. Global response format:
 | PATCH | /appointments/:id | appointment:update |
 | DELETE | /appointments/:id | appointment:delete |
 | POST | /appointments/:id/confirm | appointment:update |
+| POST | /appointments/:id/check-in | appointment:update |
+| POST | /appointments/:id/start-session | appointment:update |
 | POST | /appointments/:id/no-show | appointment:update |
 | GET | /appointments/available-slots | appointment:read |
+| GET | /appointments/queue | appointment:read |
 
 ### SOAP Notes
 | Method | Path | Permissions |
@@ -170,11 +173,13 @@ All routes under `/api/v1`. Global response format:
 | POST | /invoices/:id/mark-paid | finance:update |
 | POST | /invoices/:id/submit-medical-aid | finance:update |
 | GET | /invoices/:id/pdf | finance:read |
-| GET | /medical-aid/claims | finance:read |
-| PATCH | /medical-aid/claims/:id | finance:update |
-| POST | /medical-aid/claims/:id/resubmit | finance:update |
+| GET | /medical-schemes/claims | scheme:read |
+| POST | /medical-schemes/claims | scheme:write |
+| POST | /medical-schemes/claims/:id/submit | scheme:write |
+| PATCH | /medical-schemes/claims/:id/status | scheme:write |
+| GET | /medical-schemes/claims/report | scheme:read |
 
-Medical-aid claims are submitted and tracked in the Medical Schemes area. The worker intentionally does not invent approval or rejection outcomes: until a real funder/MediSwitch adapter is configured, staff must record the response through the claim status action. `MEDISWITCH_API_KEY` and `MEDISWITCH_API_URL` are reserved for that provider integration.
+Medical-aid claims are submitted and tracked in the Medical Schemes area. The worker intentionally does not invent approval or rejection outcomes: a real funder/MediSwitch adapter and credentials are still required before automated claim submission/status reconciliation can be enabled. `MEDISWITCH_API_KEY` and `MEDISWITCH_API_URL` are reserved for that provider integration.
 
 ### Payments
 | Method | Path | Permissions |
@@ -217,7 +222,15 @@ invoice and automatically update its balance/status.
 | POST | /inventory/drugs/:drugId/adjust | inventory:write |
 | GET | /inventory/drugs/:drugId/movements | inventory:read |
 
-Drug issues are recorded against either a patient or an active employee. Stock is decremented transactionally and cannot fall below zero; every receipt, issue, and adjustment remains in the movement ledger.
+Drug issues are recorded against either a patient or an active employee. Stock is decremented transactionally and cannot fall below zero; expired stock cannot be issued; every receipt, issue, and adjustment remains in the movement ledger.
+
+### Clinical Safety & Observations
+| Method | Path | Permissions |
+|---|---|---|
+| GET | /patients/:id/clinical-observations | clinical_observation:read |
+| POST | /patients/:id/clinical-observations | clinical_observation:write |
+
+Patient records include structured allergies, chronic conditions, current medications, blood type, preferred language, and clinical precautions. Vitals and pain observations are tenant-scoped, optionally linked to an appointment, recorded with the staff member who entered them, and included in the patient history timeline.
 
 ### Exercise Plans
 | Method | Path | Permissions |
@@ -295,7 +308,7 @@ Report detail endpoints accept ISO `startDate` and `endDate` query parameters. `
 | GET | /portal/appointments | Upcoming appointments |
 | POST | /portal/appointments/:id/cancel | Cancel own appointment |
 | GET | /portal/invoices | Own invoices |
-| POST | /portal/invoices/:id/pay | Redirect to payment |
+| POST | /portal/invoices/:id/pay | Create OneKhusa request-to-pay |
 | GET | /portal/exercise-plans | Own exercise plans |
 | GET | /portal/soap-notes | Own SOAP notes (read-only) |
 | POST | /portal/feedback | Submit session rating |
@@ -318,7 +331,28 @@ Report detail endpoints accept ISO `startDate` and `endDate` query parameters. `
 ```bash
 pnpm test          # run all tests
 pnpm test:api      # API tests only
+pnpm --filter @physiocore/worker test
+pnpm --filter @physiocore/web lint
 ```
+
+## Production Readiness Gap Register
+
+The application now covers the core outpatient physiotherapy workflows: patient registration, structured clinical intake, SOAP notes, treatment and exercise plans, outcome measures, appointments, therapist and employee management, inventory and drug issue tracking, invoices, payment methods, OneKhusa request-to-pay reconciliation, medical-scheme reporting, patient history, reminders, portal access, audit logging, and deployment checks.
+
+The following items remain before claiming full hospital-information-system scope:
+
+| Area | Status | Next action |
+|---|---|---|
+| Medical-scheme EDI / MediSwitch | External dependency | Obtain the funder contract, credentials, tariff rules, and test endpoints, then implement signed submissions and response reconciliation. |
+| Documents, consent forms, and attachments | Not yet implemented | Add encrypted object storage, document metadata, consent versioning, retention rules, and access audit events. |
+| Patient onboarding and portal identity | Partial | Add invitation/self-registration, identity verification, MFA, and secure document upload. |
+| Check-in and waiting queue | Implemented | Appointment check-in records arrival time, room, priority, and the transition into treatment; the live queue is available from Appointments. |
+| Room and resource capacity scheduling | Partial | Room labels are recorded on appointments. Add managed rooms, equipment calendars, and conflict prevention for full facility-capacity scheduling. |
+| Pharmacy prescriptions, laboratory, imaging, referrals, admissions, and beds | Out of current outpatient scope | Add only if the deployment will operate beyond physiotherapy outpatient care; each needs its own clinical workflow and integrations. |
+| Branches and broader workforce operations | Partial | Add locations, room calendars, attendance, leave, credential expiry, and staff compliance tracking. |
+| Production operations | Deployment-owned | Configure TLS, secret management, managed PostgreSQL/Redis, backups, restore drills, monitoring/alerting, log retention, and incident response. |
+
+These are deliberately recorded as explicit gaps rather than represented by placeholder screens. The current product should be positioned as an outpatient physiotherapy management system until the external integrations and broader hospital modules are delivered.
 
 ## Deployment
 
@@ -326,12 +360,12 @@ pnpm test:api      # API tests only
 docker compose -f docker/docker-compose.yml up -d
 ```
 
+The production release workflow publishes API, worker, and web images to GHCR and runs `prisma migrate deploy`. Configure the protected `production` environment with `PRODUCTION_DATABASE_URL`; runtime orchestration, TLS, secrets, backups, and restore drills must be configured on the selected hosting platform.
+
 ## Key Design Decisions
 
-- **RLS over application-level filtering**: Row-level security ensures data isolation even if a query omits tenantId.
+- **Explicit tenant scoping**: tenant IDs are enforced at authentication, route, and service boundaries; the current pooled Prisma setup does not claim transaction-safe RLS.
 - **Zod schemas in shared package**: Frontend and backend validate against the same schemas.
 - **Therapist ownership enforcement**: At the service layer, not just route level — therapists can only access their own patients.
 - **Hash-stored refresh tokens**: Refresh tokens are SHA-256 hashed before DB storage. The raw UUID is the bearer credential.
 - **HIPAA-aware logging**: Audit logs store resource IDs, not PHI (names, diagnoses).
-
-# Physiotherapy-Management-System

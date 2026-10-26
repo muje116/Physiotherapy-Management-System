@@ -71,7 +71,10 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
     '/payments',
     { preHandler: [requirePermission('payment:create')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const data = recordPaymentSchema.parse(request.body);
+      const data = recordPaymentSchema.parse({
+        ...(request.body as object),
+        idempotencyKey: request.headers['idempotency-key'] || undefined,
+      });
       const payment = await paymentService.recordPayment(request.tenantId, data);
       auditLog('CREATE', 'PAYMENT')(request, reply, { id: payment.id, after: data });
       return reply.status(201).send({ success: true, data: payment });

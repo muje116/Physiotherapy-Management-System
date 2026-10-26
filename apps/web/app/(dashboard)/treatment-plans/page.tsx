@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +51,10 @@ const STATUS_OPTIONS = [
 
 const STAGE_PROGRESS_COLORS = ['bg-red-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
 
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toISOString().split('T')[0] : '';
+}
+
 export default function TreatmentPlansPage() {
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -70,9 +74,7 @@ export default function TreatmentPlansPage() {
   const [patientSearch, setPatientSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const formatDate = (value?: string | null) => (value ? new Date(value).toISOString().split('T')[0] : '');
-
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setError(null);
     Promise.all([
@@ -104,9 +106,9 @@ export default function TreatmentPlansPage() {
       setPatients(ptRes.data.data || []);
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, [statusFilter]);
 
-  useEffect(() => { fetchData(); }, [statusFilter]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const resetPlanForm = () => {
     setFormPatientId('');

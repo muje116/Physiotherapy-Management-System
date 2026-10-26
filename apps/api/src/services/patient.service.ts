@@ -85,6 +85,12 @@ export async function create(tenantId: string, data: any) {
       nextOfKinName: data.nextOfKinName,
       nextOfKinPhone: data.nextOfKinPhone,
       howHeardAboutClinic: data.howHeardAboutClinic,
+      allergies: data.allergies,
+      chronicConditions: data.chronicConditions,
+      currentMedications: data.currentMedications,
+      bloodType: data.bloodType,
+      preferredLanguage: data.preferredLanguage,
+      clinicalPrecautions: data.clinicalPrecautions,
     },
   });
 
@@ -136,6 +142,12 @@ export async function update(tenantId: string, patientId: string, data: any, use
   if (data.nextOfKinName !== undefined) updateData.nextOfKinName = data.nextOfKinName;
   if (data.nextOfKinPhone !== undefined) updateData.nextOfKinPhone = data.nextOfKinPhone;
   if (data.howHeardAboutClinic !== undefined) updateData.howHeardAboutClinic = data.howHeardAboutClinic;
+  if (data.allergies !== undefined) updateData.allergies = data.allergies;
+  if (data.chronicConditions !== undefined) updateData.chronicConditions = data.chronicConditions;
+  if (data.currentMedications !== undefined) updateData.currentMedications = data.currentMedications;
+  if (data.bloodType !== undefined) updateData.bloodType = data.bloodType;
+  if (data.preferredLanguage !== undefined) updateData.preferredLanguage = data.preferredLanguage;
+  if (data.clinicalPrecautions !== undefined) updateData.clinicalPrecautions = data.clinicalPrecautions;
 
   const updated = await prisma.patient.update({
     where: { id: patientId },
@@ -220,10 +232,23 @@ export async function getOutcomeMeasures(tenantId: string, patientId: string, us
   });
 }
 
+function summarizeObservation(observation: any) {
+  const values: string[] = [];
+  if (observation.systolicBp != null && observation.diastolicBp != null) values.push(`BP ${observation.systolicBp}/${observation.diastolicBp}`);
+  if (observation.pulse != null) values.push(`pulse ${observation.pulse}`);
+  if (observation.respiratoryRate != null) values.push(`respiratory rate ${observation.respiratoryRate}`);
+  if (observation.temperatureC != null) values.push(`temperature ${observation.temperatureC} C`);
+  if (observation.oxygenSaturation != null) values.push(`SpO2 ${observation.oxygenSaturation}%`);
+  if (observation.weightKg != null) values.push(`weight ${observation.weightKg} kg`);
+  if (observation.heightCm != null) values.push(`height ${observation.heightCm} cm`);
+  if (observation.painScore != null) values.push(`pain ${observation.painScore}/10`);
+  return values.join(' | ') || observation.notes || 'Observation recorded';
+}
+
 export async function getHistory(tenantId: string, patientId: string, userId?: string, userRole?: string) {
   await verifyPatientAccess(tenantId, patientId, userId, userRole);
 
-  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, paymentRequests, clientTasks, schemeClaims, followUps, reminderLogs, feedback, drugIssues] = await Promise.all([
+  const [appointments, notes, invoices, exercisePlans, treatmentPlans, outcomeMeasures, payments, paymentRequests, clientTasks, schemeClaims, followUps, reminderLogs, feedback, drugIssues, clinicalObservations] = await Promise.all([
     prisma.appointment.findMany({
       where: { patientId, tenantId },
       include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } },
@@ -249,6 +274,14 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
       where: { patientId, tenantId, type: 'ISSUE' },
       include: { drugInventory: true, recordedBy: { select: { id: true, firstName: true, lastName: true } } },
       orderBy: { createdAt: 'desc' },
+    }),
+    prisma.clinicalObservation.findMany({
+      where: { patientId, tenantId },
+      include: {
+        appointment: { select: { id: true, startAt: true, type: true } },
+        recordedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { recordedAt: 'desc' },
     }),
   ]);
 
@@ -317,6 +350,11 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
     `${issue.drugInventory?.name || 'Medication'} x${issue.quantity} ${issue.drugInventory?.unit || 'unit(s)'}`,
     issue, issue.recordedBy ? `${issue.recordedBy.firstName} ${issue.recordedBy.lastName}` : undefined,
   ));
+  clinicalObservations.forEach((observation: any) => add(
+    'clinical_observation', observation.recordedAt, 'Clinical observation',
+    summarizeObservation(observation), observation,
+    observation.recordedBy ? `${observation.recordedBy.firstName} ${observation.recordedBy.lastName}` : undefined,
+  ));
 
   timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -339,6 +377,7 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
       payments: payments.length,
       paymentRequests: paymentRequests.length,
       medicationIssues: drugIssues.length,
+      clinicalObservations: clinicalObservations.length,
       tasks: clientTasks.length,
       totalInvoiced,
       totalPaid,
@@ -359,6 +398,7 @@ export async function getHistory(tenantId: string, patientId: string, userId?: s
       reminderLogs,
       feedback,
       drugIssues,
+      clinicalObservations,
     },
     timeline,
   };

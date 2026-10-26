@@ -22,7 +22,7 @@ export default async function portalRoutes(fastify: FastifyInstance) {
       portalService.getInvoices(profile.id),
       portalService.getExercisePlans(profile.id),
       portalService.getSoapNotes(profile.id),
-      portalService.getPaymentRequests(profile.id),
+      portalService.getPaymentRequests(profile.tenantId, profile.id),
     ]);
 
     return reply.send({
@@ -92,7 +92,7 @@ export default async function portalRoutes(fastify: FastifyInstance) {
 
   fastify.get('/portal/payment-requests', async (request: FastifyRequest, reply: FastifyReply) => {
     const profile = await portalService.getProfile(request.user.id);
-    const paymentRequests = await portalService.getPaymentRequests(profile.id);
+    const paymentRequests = await portalService.getPaymentRequests(profile.tenantId, profile.id);
     return reply.send({ success: true, data: paymentRequests });
   });
 
@@ -118,7 +118,7 @@ export default async function portalRoutes(fastify: FastifyInstance) {
   fastify.post('/portal/invoices/:invoiceId/pay', async (request: FastifyRequest, reply: FastifyReply) => {
     const { invoiceId } = request.params as { invoiceId: string };
     const profile = await portalService.getProfile(request.user.id);
-    const result = await portalService.payInvoice(profile.id, invoiceId);
+    const result = await portalService.payInvoice(profile.tenantId, profile.id, invoiceId, request.user.id);
     return reply.send({ success: true, data: result });
   });
 }

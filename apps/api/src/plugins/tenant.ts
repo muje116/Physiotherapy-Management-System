@@ -18,7 +18,9 @@ export function setupTenant(fastify: FastifyInstance) {
 
     request.tenant = tenant;
 
-    await prisma.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenant.id}, true)`;
+    // Tenant-owned service queries must always include tenantId explicitly.
+    // Do not set a transaction-local PostgreSQL setting here: Fastify hooks
+    // and Prisma queries can use different pooled connections.
   });
 }
 

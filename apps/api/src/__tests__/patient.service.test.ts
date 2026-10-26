@@ -51,6 +51,9 @@ vi.mock('@physiocore/db', () => ({
     drugStockMovement: {
       findMany: vi.fn(),
     },
+    clinicalObservation: {
+      findMany: vi.fn(),
+    },
   },
   Role: {
     SUPER_ADMIN: 'SUPER_ADMIN',
@@ -101,6 +104,7 @@ describe('patient.service', () => {
     vi.mocked(prisma.reminderLog.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.patientFeedback.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.drugStockMovement.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.clinicalObservation.findMany).mockResolvedValue([] as any);
   });
 
   describe('list', () => {

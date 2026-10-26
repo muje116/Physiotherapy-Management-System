@@ -1,10 +1,11 @@
 import Fastify, { FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { z } from 'zod';
-import { Prisma } from '@physiocore/db';
+import { Prisma, prisma } from '@physiocore/db';
 import { AppError } from './utils/errors';
 import { onResponseAuditHook } from './middleware/audit';
 import { setupAuth } from './plugins/auth';
@@ -29,6 +30,7 @@ import treatmentPlanRoutes from './routes/treatment-plan.routes';
 import clientTaskRoutes from './routes/client-task.routes';
 import outcomeMeasureRoutes from './routes/outcome-measure.routes';
 import inventoryRoutes from './routes/inventory.routes';
+import clinicalObservationRoutes from './routes/clinical-observation.routes';
 import { setupRequestId } from './middleware/request-id';
 import { setupErrorTracking } from './middleware/error-tracker';
 import { setupPerformanceMonitoring } from './middleware/performance';
@@ -41,8 +43,10 @@ async function buildApp() {
   validateEnv();
 
   const app = Fastify({
+    trustProxy: process.env.TRUST_PROXY === 'true',
     logger: {
       level: process.env.LOG_LEVEL || 'info',
+      redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
     },
   });
 
@@ -61,9 +65,11 @@ async function buildApp() {
   });
 
   await app.register(cors, {
-    origin: FRONTEND_URL,
+    origin: FRONTEND_URL.split(',').map((origin) => origin.trim()),
     credentials: true,
   });
+
+  await app.register(cookie);
 
   await app.register(rateLimit, {
     max: 500,
@@ -73,28 +79,30 @@ async function buildApp() {
     },
   });
 
-  await app.register(swagger, {
-    openapi: {
-      info: {
-        title: 'PhysioCore API',
-        description: 'Physiotherapy practice management API',
-        version: '1.0.0',
-      },
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
+  if (process.env.NODE_ENV !== 'production') {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: 'PhysioCore API',
+          description: 'Physiotherapy practice management API',
+          version: '1.0.0',
+        },
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'JWT',
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  await app.register(swaggerUi, {
-    routePrefix: '/docs',
-  });
+    await app.register(swaggerUi, {
+      routePrefix: '/docs',
+    });
+  }
 
   setupAuth(app);
   setupTenant(app);
@@ -108,7 +116,7 @@ async function buildApp() {
     name: 'PhysioCore API',
     status: 'ok',
     health: '/health',
-    docs: '/docs',
+    docs: process.env.NODE_ENV === 'production' ? null : '/docs',
     api: '/api/v1',
   }));
 
@@ -130,6 +138,9 @@ async function buildApp() {
       }
       if (error.code === 'P2025') {
         return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } });
+      }
+      if (error.code === 'P2004') {
+        return reply.status(409).send({ success: false, error: { code: 'CONFLICT', message: 'The requested change conflicts with existing data' } });
       }
     }
 
@@ -186,6 +197,7 @@ async function buildApp() {
   await app.register(clientTaskRoutes, { prefix: '/api/v1' });
   await app.register(outcomeMeasureRoutes, { prefix: '/api/v1' });
   await app.register(inventoryRoutes, { prefix: '/api/v1' });
+  await app.register(clinicalObservationRoutes, { prefix: '/api/v1' });
 
   return app;
 }
@@ -193,10 +205,24 @@ async function buildApp() {
 async function start() {
   const app = await buildApp();
 
+  const shutdown = async (signal: string) => {
+    app.log.info({ signal }, 'Shutting down API');
+    try {
+      await app.close();
+      await prisma.$disconnect();
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+
   try {
     await app.listen({ port: PORT, host: '0.0.0.0' });
     app.log.info(`PhysioCore API running on port ${PORT}`);
-    app.log.info(`Documentation available at http://localhost:${PORT}/docs`);
+    if (process.env.NODE_ENV !== 'production') {
+      app.log.info(`Documentation available at http://localhost:${PORT}/docs`);
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);

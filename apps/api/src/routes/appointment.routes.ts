@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { availableSlotsQuerySchema, cancelAppointmentSchema, createAppointmentSchema, updateAppointmentSchema, appointmentQuerySchema } from '@physiocore/schema';
+import { appointmentQueueQuerySchema, availableSlotsQuerySchema, cancelAppointmentSchema, checkInAppointmentSchema, createAppointmentSchema, updateAppointmentSchema, appointmentQuerySchema } from '@physiocore/schema';
 import * as appointmentService from '../services/appointment.service';
 import { requirePermission } from '../middleware/permissions';
 import { auditLog } from '../middleware/audit';
@@ -33,6 +33,16 @@ export default async function appointmentRoutes(fastify: FastifyInstance) {
       const query = availableSlotsQuerySchema.parse(request.query);
       const slots = await appointmentService.getAvailableSlots(request.tenantId, query.therapistId, query.date);
       return reply.send({ success: true, data: slots });
+    }
+  );
+
+  fastify.get(
+    '/appointments/queue',
+    { preHandler: [requirePermission('appointment:read')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const query = appointmentQueueQuerySchema.parse(request.query);
+      const queue = await appointmentService.getQueue(request.tenantId, query);
+      return reply.send({ success: true, data: queue });
     }
   );
 
@@ -76,6 +86,29 @@ export default async function appointmentRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { appointmentId } = request.params as { appointmentId: string };
       const appointment = await appointmentService.confirm(request.tenantId, appointmentId);
+      return reply.send({ success: true, data: appointment });
+    }
+  );
+
+  fastify.post(
+    '/appointments/:appointmentId/check-in',
+    { preHandler: [requirePermission('appointment:update')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { appointmentId } = request.params as { appointmentId: string };
+      const data = checkInAppointmentSchema.parse(request.body ?? {});
+      const appointment = await appointmentService.checkIn(request.tenantId, appointmentId, data);
+      auditLog('CHECK_IN', 'APPOINTMENT')(request, reply, { id: appointmentId });
+      return reply.send({ success: true, data: appointment });
+    }
+  );
+
+  fastify.post(
+    '/appointments/:appointmentId/start-session',
+    { preHandler: [requirePermission('appointment:update')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { appointmentId } = request.params as { appointmentId: string };
+      const appointment = await appointmentService.startSession(request.tenantId, appointmentId);
+      auditLog('START_SESSION', 'APPOINTMENT')(request, reply, { id: appointmentId });
       return reply.send({ success: true, data: appointment });
     }
   );

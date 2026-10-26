@@ -1,7 +1,6 @@
 import net from 'node:net';
+import { prisma } from '@physiocore/db';
 import { redisConnection } from './redis';
-
-const idleHandles: NodeJS.Timeout[] = [];
 
 async function isRedisAvailable() {
   const { host, port } = redisConnection;
@@ -28,7 +27,9 @@ async function main() {
     const { host, port } = redisConnection;
     console.warn(`Redis is not available at ${host}:${port}. Background workers are disabled for this dev session.`);
     console.warn('Start Redis and restart the worker to enable reminders, invoices, reports, and medical-aid jobs.');
-    idleHandles.push(setInterval(() => {}, 60 * 60 * 1000));
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Redis is required for the production worker');
+    }
     return;
   }
 
@@ -51,4 +52,14 @@ async function main() {
   console.log('All workers registered');
 }
 
-main().catch(console.error);
+process.once('SIGTERM', () => {
+  void prisma.$disconnect().finally(() => process.exit(0));
+});
+process.once('SIGINT', () => {
+  void prisma.$disconnect().finally(() => process.exit(0));
+});
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

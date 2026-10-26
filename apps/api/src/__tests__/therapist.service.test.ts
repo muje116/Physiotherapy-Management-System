@@ -98,7 +98,7 @@ describe('therapist.service', () => {
 
   describe('create', () => {
     it('should create a new therapist profile', async () => {
-      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', tenantId } as any);
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', tenantId, role: Role.THERAPIST, isActive: true } as any);
       vi.mocked(prisma.therapist.findUnique).mockResolvedValue(null);
       vi.mocked(prisma.therapist.create).mockResolvedValue({
         ...mockTherapist,
@@ -118,7 +118,7 @@ describe('therapist.service', () => {
     });
 
     it('should throw ConflictError when user already has therapist profile', async () => {
-      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', tenantId } as any);
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', tenantId, role: Role.THERAPIST, isActive: true } as any);
       vi.mocked(prisma.therapist.findUnique).mockResolvedValue({ id: 'existing' } as any);
 
       await expect(therapistService.create(tenantId, { userId: 'user-1' })).rejects.toThrow('User already has a therapist profile');
