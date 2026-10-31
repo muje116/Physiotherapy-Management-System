@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { recordIdSchema } from './common';
+import { dateOrDateTimeSchema, recordIdSchema } from './common';
 
 export const createAppointmentSchema = z.object({
   patientId: recordIdSchema,
@@ -83,7 +83,7 @@ export const appointmentQueueQuerySchema = z.object({
 
 export const availableSlotsQuerySchema = z.object({
   therapistId: recordIdSchema,
-  date: z.string().datetime(),
+  date: dateOrDateTimeSchema,
 });
 
 export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;

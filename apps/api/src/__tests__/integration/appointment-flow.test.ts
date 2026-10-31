@@ -86,6 +86,8 @@ describe('Appointment Flow Integration', () => {
     vi.clearAllMocks();
     vi.mocked(prisma.tenant.findUnique).mockResolvedValue(mockTenant as any);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any);
+    vi.mocked(prisma.patient.findFirst).mockResolvedValue({ id: 'patient-1' } as any);
+    vi.mocked(prisma.therapist.findFirst).mockResolvedValue({ id: 'therapist-1' } as any);
     vi.mocked(prisma.$executeRaw).mockResolvedValue(0 as any);
     vi.mocked(prisma.auditLog.create).mockResolvedValue({} as any);
   });

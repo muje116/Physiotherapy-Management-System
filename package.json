@@ -14,6 +14,7 @@
     "db:migrate": "pnpm --filter @physiocore/db migrate",
     "db:push": "pnpm --filter @physiocore/db push",
     "db:seed": "pnpm --filter @physiocore/db seed",
+    "db:baseline:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/baseline-legacy-db.ps1 -Apply",
     "db:studio": "pnpm --filter @physiocore/db studio",
     "test": "pnpm -r run test",
     "test:api": "pnpm --filter @physiocore/api test",

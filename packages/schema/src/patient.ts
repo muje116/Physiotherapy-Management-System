@@ -1,11 +1,15 @@
 import { z } from 'zod';
-import { recordIdSchema } from './common';
+import { dateOrDateTimeSchema, recordIdSchema } from './common';
 
 export const createPatientSchema = z.object({
   firstName: z.string().min(1).max(50),
   lastName: z.string().min(1).max(50),
-  dateOfBirth: z.string().datetime(),
-  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  dateOfBirth: dateOrDateTimeSchema,
+  // Accept legacy title-case values while keeping a normalized API value.
+  gender: z.preprocess(
+    (value) => typeof value === 'string' ? value.trim().toUpperCase() : value,
+    z.enum(['MALE', 'FEMALE', 'OTHER']),
+  ).optional(),
   phone: z.string().optional(),
   email: z.union([z.string().email(), z.literal('')]).optional(),
   address: z

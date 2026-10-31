@@ -5,8 +5,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ROOT = Split-Path -Parent $PSScriptRoot
+$env:DATABASE_URL = "postgresql://test:test@localhost:5433/physiocore_test"
+$env:REDIS_URL = "redis://localhost:6380"
+$env:JWT_ACCESS_SECRET = "test-access-secret"
+$env:JWT_REFRESH_SECRET = "test-refresh-secret"
+$env:FRONTEND_URL = "http://localhost:3000"
+$env:NODE_ENV = "test"
+$env:LOG_LEVEL = "silent"
 
 if (-not $SkipContainers) {
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "Docker Desktop is required for containerized integration tests. Install/start Docker, or use -SkipContainers for the mocked HTTP integration suite."
+  }
+
   Write-Host "=== Starting test containers ===" -ForegroundColor Cyan
   docker compose -f "$ROOT\docker\docker-compose.test.yml" up -d --wait
 
@@ -29,8 +40,8 @@ if (-not $SkipContainers) {
   Write-Host "=== Running Prisma migrations on test DB ===" -ForegroundColor Cyan
   Push-Location "$ROOT\packages\db"
   try {
-    dotenv -e "$ROOT\.env.test" -- npx prisma migrate deploy
-    if (-not $?) { throw "Migration failed" }
+    pnpm exec prisma migrate deploy
+    if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
   } finally {
     Pop-Location
   }
@@ -39,8 +50,8 @@ if (-not $SkipContainers) {
     Write-Host "=== Seeding test database ===" -ForegroundColor Cyan
     Push-Location "$ROOT\packages\db"
     try {
-      dotenv -e "$ROOT\.env.test" -- npx prisma db seed
-      if (-not $?) { throw "Seed failed" }
+      pnpm exec prisma db seed
+      if ($LASTEXITCODE -ne 0) { throw "Seed failed" }
     } finally {
       Pop-Location
     }
@@ -50,8 +61,8 @@ if (-not $SkipContainers) {
 Write-Host "=== Running integration tests ===" -ForegroundColor Cyan
 Push-Location "$ROOT\apps\api"
 try {
-  npx vitest run --config vitest.config.integration.ts
-  if (-not $?) { throw "Integration tests failed" }
+  pnpm exec vitest run --config vitest.config.integration.ts
+  if ($LASTEXITCODE -ne 0) { throw "Integration tests failed" }
 } finally {
   Pop-Location
 }

@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const uuidSchema = z.string().uuid();
 
+// Date fields in forms may be submitted as a calendar date or a full ISO timestamp.
+export const dateOrDateTimeSchema = z.union([z.string().date(), z.string().datetime()]);
+
 // Database record ids are opaque strings so existing installations may use UUIDs,
 // cuid-like values, or stable seeded ids.
 export const recordIdSchema = z.string().trim().min(1).max(100);

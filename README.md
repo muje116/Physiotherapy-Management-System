@@ -49,6 +49,21 @@ pnpm dev:api      # API only
 pnpm dev:web      # frontend only
 ```
 
+### Existing database baseline
+
+If an existing installation predates Prisma migration history but has already
+been synchronized to the current schema without dropping data, first review the
+baseline command and then run:
+
+```powershell
+.\scripts\baseline-legacy-db.ps1 -Apply
+pnpm --filter @physiocore/db exec prisma migrate status
+```
+
+The baseline records migration history only; it does not modify application
+records. Fresh databases should continue to use `pnpm db:migrate` or
+`prisma migrate deploy` normally.
+
 ## API Documentation
 
 Swagger UI at `http://localhost:4000/docs` once the API is running.

@@ -5,12 +5,22 @@ import { buildApp } from '../../index';
 
 vi.mock('@physiocore/db', () => {
   const mockPrisma: any = {
-    patient: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
+    patient: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
     appointment: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
     soapNote: { findMany: vi.fn() },
     invoice: { findMany: vi.fn() },
     exercisePlan: { findMany: vi.fn() },
     outcomeMeasure: { findMany: vi.fn() },
+    treatmentPlan: { findMany: vi.fn() },
+    payment: { findMany: vi.fn() },
+    paymentRequest: { findMany: vi.fn() },
+    clientTask: { findMany: vi.fn() },
+    schemeClaim: { findMany: vi.fn() },
+    followUp: { findMany: vi.fn() },
+    reminderLog: { findMany: vi.fn() },
+    patientFeedback: { findMany: vi.fn() },
+    drugStockMovement: { findMany: vi.fn() },
+    clinicalObservation: { findMany: vi.fn() },
     therapist: { findFirst: vi.fn() },
     tenantSettings: { findUnique: vi.fn(), upsert: vi.fn() },
     scheduleBlock: { findMany: vi.fn() },
@@ -64,6 +74,17 @@ describe('RBAC Flow Integration', () => {
     therapists: [] as any[],
   };
 
+  const mockAppointment = {
+    id: 'appointment-1',
+    tenantId: testTenantId,
+    patientId: 'patient-1',
+    therapistId: 't1',
+    startAt: new Date('2024-07-01T09:00:00Z'),
+    endAt: new Date('2024-07-01T09:45:00Z'),
+    status: 'SCHEDULED',
+    type: 'INITIAL_ASSESSMENT',
+  };
+
   function makeToken(role: Role): string {
     return jwt.sign(
       { sub: testUserId, tenantId: testTenantId, role },
@@ -101,8 +122,34 @@ describe('RBAC Flow Integration', () => {
     vi.mocked(prisma.patient.count).mockResolvedValue(1);
     vi.mocked(prisma.patient.create).mockResolvedValue(mockPatient as any);
     vi.mocked(prisma.patient.update).mockResolvedValue(mockPatient as any);
+    vi.mocked(prisma.patient.findUnique).mockResolvedValue({
+      ...mockPatient,
+      portalUserId: testUserId,
+      _count: { appointments: 0, invoices: 0, exercisePlans: 0, soapNotes: 0 },
+    } as any);
     vi.mocked(prisma.appointment.findMany).mockResolvedValue([]);
     vi.mocked(prisma.appointment.count).mockResolvedValue(0);
+    vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.appointment.create).mockResolvedValue(mockAppointment as any);
+    vi.mocked(prisma.therapist.findFirst).mockResolvedValue({ id: 't1' } as any);
+    for (const model of [
+      prisma.soapNote,
+      prisma.invoice,
+      prisma.exercisePlan,
+      prisma.outcomeMeasure,
+      prisma.treatmentPlan,
+      prisma.payment,
+      prisma.paymentRequest,
+      prisma.clientTask,
+      prisma.schemeClaim,
+      prisma.followUp,
+      prisma.reminderLog,
+      prisma.patientFeedback,
+      prisma.drugStockMovement,
+      prisma.clinicalObservation,
+    ]) {
+      vi.mocked(model.findMany).mockResolvedValue([] as any);
+    }
   });
 
   function setUser(role: Role) {

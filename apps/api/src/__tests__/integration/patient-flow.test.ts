@@ -5,12 +5,22 @@ import { buildApp } from '../../index';
 
 vi.mock('@physiocore/db', () => {
   const mockPrisma: any = {
-    patient: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
+    patient: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
     appointment: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn() },
     soapNote: { findMany: vi.fn() },
     invoice: { findMany: vi.fn() },
     exercisePlan: { findMany: vi.fn() },
     outcomeMeasure: { findMany: vi.fn() },
+    treatmentPlan: { findMany: vi.fn() },
+    payment: { findMany: vi.fn() },
+    paymentRequest: { findMany: vi.fn() },
+    clientTask: { findMany: vi.fn() },
+    schemeClaim: { findMany: vi.fn() },
+    followUp: { findMany: vi.fn() },
+    reminderLog: { findMany: vi.fn() },
+    patientFeedback: { findMany: vi.fn() },
+    drugStockMovement: { findMany: vi.fn() },
+    clinicalObservation: { findMany: vi.fn() },
     therapist: { findFirst: vi.fn() },
     tenantSettings: { findUnique: vi.fn(), upsert: vi.fn() },
     scheduleBlock: { findMany: vi.fn() },
@@ -97,6 +107,24 @@ describe('Patient Flow Integration', () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any);
     vi.mocked(prisma.$executeRaw).mockResolvedValue(0 as any);
     vi.mocked(prisma.auditLog.create).mockResolvedValue({} as any);
+    for (const model of [
+      prisma.soapNote,
+      prisma.invoice,
+      prisma.exercisePlan,
+      prisma.outcomeMeasure,
+      prisma.treatmentPlan,
+      prisma.payment,
+      prisma.paymentRequest,
+      prisma.clientTask,
+      prisma.schemeClaim,
+      prisma.followUp,
+      prisma.reminderLog,
+      prisma.patientFeedback,
+      prisma.drugStockMovement,
+      prisma.clinicalObservation,
+    ]) {
+      vi.mocked(model.findMany).mockResolvedValue([] as any);
+    }
   });
 
   describe('GET /api/v1/patients', () => {
