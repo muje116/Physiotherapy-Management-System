@@ -225,6 +225,27 @@ async function main() {
     patients.push({ id: patient.id, tenantId: tenant.id });
   }
 
+  // Link a demo portal account to the first seeded patient so every role can be
+  // exercised from a fresh development database.
+  const patientPortalUser = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: 'patient@physiocare.com' } },
+    update: {},
+    create: {
+      id: 'user-patient',
+      tenantId: tenant.id,
+      email: 'patient@physiocare.com',
+      passwordHash,
+      firstName: SOUTH_AFRICAN_NAMES[0].first,
+      lastName: SOUTH_AFRICAN_NAMES[0].last,
+      role: Role.PATIENT,
+    },
+  });
+
+  await prisma.patient.update({
+    where: { id: patients[0].id },
+    data: { portalUserId: patientPortalUser.id },
+  });
+
   // Assign each patient to 1-2 therapists
   for (const patient of patients) {
     const numTherapists = 1 + Math.floor(Math.random() * 2);

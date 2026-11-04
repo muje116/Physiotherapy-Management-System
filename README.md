@@ -90,6 +90,8 @@ After seeding:
 | ADMIN | manager@physiocare.com | password123 |
 | FRONT_DESK | frontdesk@physiocare.com | password123 |
 | BILLING | billing@physiocare.com | password123 |
+| THERAPIST | sarah.johnson@physiocare.com | password123 |
+| PATIENT | patient@physiocare.com | password123 |
 
 ## API Routes
 
