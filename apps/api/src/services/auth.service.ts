@@ -189,12 +189,17 @@ export async function forgotPassword(email: string) {
   });
 
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${encodeURIComponent(resetToken)}`;
+  const emailChannel = await prisma.notificationChannel.findFirst({
+    where: { tenantId: user.tenantId, type: 'RESEND_EMAIL', isActive: true },
+    select: { apiKey: true, from: true },
+  });
   await sendEmail({
     to: user.email,
     subject: 'Reset your PhysioCore password',
     body: `<p>Hello ${user.firstName || 'there'},</p><p>Use the link below to reset your password. It expires in one hour.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
     textBody: `Reset your PhysioCore password: ${resetUrl}`,
-  });
+    from: emailChannel?.from || undefined,
+  }, { apiKey: emailChannel?.apiKey || undefined });
 }
 
 export async function resetPassword(token: string, password: string) {

@@ -13,6 +13,14 @@ export async function listSchemes(tenantId: string) {
   return prisma.medicalScheme.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
 }
 
+export async function listActiveSchemeOptions(tenantId: string) {
+  return prisma.medicalScheme.findMany({
+    where: { tenantId, isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
 export async function createScheme(tenantId: string, data: { name: string; code: string; tariffVersion?: string; contactNumber?: string; email?: string; isActive?: boolean }) {
   return prisma.medicalScheme.create({
     data: {

@@ -13,6 +13,15 @@ import {
 
 export default async function medicalSchemeRoutes(fastify: FastifyInstance) {
   fastify.get(
+    '/medical-schemes/options',
+    { preHandler: [requirePermission('patient:read')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const schemes = await medicalSchemeService.listActiveSchemeOptions(request.tenantId);
+      return reply.send({ success: true, data: schemes });
+    }
+  );
+
+  fastify.get(
     '/medical-schemes',
     { preHandler: [requirePermission('scheme:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {

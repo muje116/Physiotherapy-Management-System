@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
@@ -106,7 +107,7 @@ export function Sidebar() {
   const logoUrl = user?.tenant?.logoUrl;
 
   const BrandMark = ({ dark = false }: { dark?: boolean }) => logoUrl
-    ? <img src={logoUrl} alt="" className="h-7 w-7 rounded-md object-contain" />
+    ? <Image src={logoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-md object-contain" />
     : <HeartPulse className={cn('h-6 w-6', dark ? 'text-[#1d624b]' : 'text-[#aad9b7]')} />;
 
   return (

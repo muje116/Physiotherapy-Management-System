@@ -410,7 +410,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, currency]);
 
   const refreshOutcomeMeasures = async () => {
     const response = await api.get(`/patients/${id}/outcome-measures`);

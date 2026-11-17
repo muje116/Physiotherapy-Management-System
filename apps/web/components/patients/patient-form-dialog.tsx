@@ -190,7 +190,7 @@ export function PatientFormDialog({
     if (open) {
       setForm(formFromPatient(patient));
       setError(null);
-      api.get('/medical-schemes')
+      api.get('/medical-schemes/options')
         .then(({ data }) => setMedicalInsuranceOptions((data.data || []).filter((scheme: any) => scheme.isActive !== false).map((scheme: any) => ({ value: scheme.name, label: scheme.name }))))
         .catch(() => setMedicalInsuranceOptions([]));
     }

@@ -100,7 +100,7 @@ export function CountryAddressFields({
   const provinceOptions = useMemo(() => {
     const divisions = provinceLevel ? countryDataset?.data?.[provinceLevel.key] || [] : [];
     return divisions.map((division) => ({ value: division.name_en, label: division.name_en, id: division.id }));
-  }, [countryDataset, provinceLevel?.key]);
+  }, [countryDataset, provinceLevel]);
 
   const districtOptions = useMemo(() => {
     const divisions = districtLevel ? countryDataset?.data?.[districtLevel.key] || [] : [];
@@ -111,7 +111,7 @@ export function CountryAddressFields({
       ? divisions.filter((division) => division.parent_id === selectedProvince.id || division.parent_name_en === province)
       : divisions;
     return children.map((division) => ({ value: division.name_en, label: division.name_en, id: division.id }));
-  }, [countryDataset, districtLevel?.key, province, provinceOptions]);
+  }, [countryDataset, districtLevel, province, provinceOptions]);
 
   return (
     <>

@@ -28,6 +28,7 @@ interface ClientTaskStats { pending: number }
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const currency = user?.tenant?.currency || 'ZAR';
   const canViewPractice = hasPermission(user, 'finance:read');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -39,7 +40,7 @@ export default function DashboardPage() {
   const [taskStats, setTaskStats] = useState<ClientTaskStats | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     if (!canViewPractice) {
       api.get('/users/me')
         .then(({ data: response }) => setProfile(response.data))
@@ -75,7 +76,7 @@ export default function DashboardPage() {
       setTaskStats(ctRes.data.data);
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [canViewPractice, user?.id]);
+  }, [canViewPractice, userId]);
 
   if (loading) return (
     <div className="mx-auto max-w-7xl space-y-8">
