@@ -23,3 +23,14 @@ export function parseRedisConnection(value = process.env.REDIS_URL): RedisConnec
 }
 
 export const redisConnection = parseRedisConnection();
+
+// API requests should fail quickly when Redis is unavailable instead of
+// keeping an open reconnect loop that adds latency and floods the logs. The
+// worker owns long-lived Redis connections and can use the base connection.
+export const redisProducerConnection = {
+  ...redisConnection,
+  connectTimeout: 3000,
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+  retryStrategy: () => null,
+};

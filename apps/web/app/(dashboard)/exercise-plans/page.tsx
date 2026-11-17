@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,13 +12,15 @@ import { StatusBadge } from '@/components/status-badge';
 import { Plus, Dumbbell, CheckCircle, Clock, Loader2, Send } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 
 interface ExercisePlanCard {
   id: string;
   patient: string;
   name: string;
   exercises: number;
-  sent: boolean;
+  sendStatus: 'DRAFT' | 'QUEUED' | 'SENT' | 'FAILED';
+  sendError: string | null;
   date: string;
   items: string[];
 }
@@ -36,7 +38,8 @@ function mapPlan(plan: any): ExercisePlanCard {
     patient: plan.patient ? `${plan.patient.firstName} ${plan.patient.lastName}` : 'Unknown patient',
     name: plan.name,
     exercises: plan.items?.length || 0,
-    sent: Boolean(plan.sentAt),
+    sendStatus: plan.sentAt ? 'SENT' : (plan.sendStatus || 'DRAFT'),
+    sendError: plan.sendError || null,
     date: new Date(plan.createdAt).toISOString().split('T')[0],
     items: (plan.items || []).map((item: any) => item.exerciseName),
   };
@@ -64,6 +67,11 @@ export default function ExercisePlansPage() {
   const [formReps, setFormReps] = useState('');
   const [formFrequency, setFormFrequency] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const plansRef = useRef(plans);
+
+  useEffect(() => {
+    plansRef.current = plans;
+  }, [plans]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -71,7 +79,7 @@ export default function ExercisePlansPage() {
     try {
       const [plansResponse, patientsResponse] = await Promise.all([
         api.get('/exercise-plans', { params: { page: 1, limit: 100 } }),
-        api.get('/patients', { params: { page: 1, limit: 100 } }).catch(() => ({ data: { data: [] } })),
+        api.get('/patients', { params: { page: 1, limit: 100, compact: true } }),
       ]);
       setPlans((plansResponse.data.data || []).map(mapPlan));
       setPatients((patientsResponse.data.data || []).map((patient: any) => ({
@@ -81,7 +89,7 @@ export default function ExercisePlansPage() {
         patientCode: patient.patientCode,
       })));
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Unable to load exercise plans');
+      setError(err.message || err.response?.data?.error?.message || 'Unable to load exercise plans');
     } finally {
       setLoading(false);
     }
@@ -90,6 +98,43 @@ export default function ExercisePlansPage() {
   useEffect(() => {
     void fetchData();
   }, []);
+
+  const hasQueuedPlans = plans.some((plan) => plan.sendStatus === 'QUEUED');
+  useEffect(() => {
+    if (!hasQueuedPlans) return;
+
+    let active = true;
+    let requestInFlight = false;
+    const refreshStatuses = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const response = await api.get('/exercise-plans', { params: { page: 1, limit: 100 } });
+        if (!active) return;
+        const updatedPlans = (response.data.data || []).map(mapPlan) as ExercisePlanCard[];
+        const previousPlans = plansRef.current;
+
+        for (const plan of updatedPlans) {
+          const previous = previousPlans.find((item) => item.id === plan.id);
+          if (previous?.sendStatus !== 'QUEUED') continue;
+          if (plan.sendStatus === 'SENT') toast.success(`${plan.name} sent to the patient`);
+          if (plan.sendStatus === 'FAILED') toast.error(plan.sendError || `Could not send ${plan.name}`);
+        }
+
+        setPlans(updatedPlans);
+      } catch {
+        // Keep polling while queued; a transient status check failure should not hide the plan.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const timer = window.setInterval(() => void refreshStatuses(), 2500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [hasQueuedPlans]);
 
   const resetForm = () => {
     setFormPatientId('');
@@ -110,7 +155,9 @@ export default function ExercisePlansPage() {
 
   const savePlan = async () => {
     if (!formPatientId || !formName.trim() || !formExerciseName.trim()) {
-      setError('Select a patient and enter a plan name and first exercise.');
+      const message = 'Select a patient and enter a plan name and first exercise.';
+      setError(message);
+      toast.error(message);
       return;
     }
 
@@ -132,9 +179,12 @@ export default function ExercisePlansPage() {
       });
       setDialogOpen(false);
       resetForm();
+      toast.success('Exercise plan created');
       await fetchData();
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Unable to create exercise plan');
+      const message = err.message || err.response?.data?.error?.message || 'Unable to create exercise plan';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -145,16 +195,20 @@ export default function ExercisePlansPage() {
     setError(null);
     try {
       await api.post(`/exercise-plans/${planId}/send`);
-      setPlans((current) => current.map((plan) => plan.id === planId ? { ...plan, sent: true } : plan));
+      setPlans((current) => current.map((plan) => plan.id === planId
+        ? { ...plan, sendStatus: 'QUEUED', sendError: null }
+        : plan));
+      toast.success('Plan queued for delivery');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Unable to send exercise plan');
+      const message = err.message || err.response?.data?.error?.message || 'Unable to send exercise plan';
+      setError(message);
+      toast.error(message);
     } finally {
       setSendingId(null);
     }
   };
 
   if (loading) return <div className="p-6 space-y-4"><Skeleton className="h-8 w-48" /><div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-48" /><Skeleton className="h-48" /></div></div>;
-  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -167,6 +221,13 @@ export default function ExercisePlansPage() {
           <Plus className="mr-2 h-4 w-4" /> Create Plan
         </Button>
       </div>
+
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <span>{error}</span>
+          <Button size="sm" variant="outline" onClick={() => void fetchData()}>Retry</Button>
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
@@ -233,7 +294,7 @@ export default function ExercisePlansPage() {
                   <CardTitle className="text-base">{plan.name}</CardTitle>
                   <CardDescription>{plan.patient} · {plan.date} · {plan.exercises} exercises</CardDescription>
                 </div>
-                <StatusBadge status={plan.sent ? 'SENT' : 'DRAFT'} />
+                <StatusBadge status={plan.sendStatus} />
               </div>
             </CardHeader>
             <CardContent>
@@ -247,12 +308,22 @@ export default function ExercisePlansPage() {
                 {plan.items.length === 0 && <p className="text-sm text-muted-foreground">No exercises added yet</p>}
               </div>
               <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3" /> {plan.sent ? 'Sent to patient' : 'Not sent'}</span>
+                <span className="flex items-center gap-1">
+                  {plan.sendStatus === 'SENT'
+                    ? <><CheckCircle className="h-3 w-3" /> Sent to patient</>
+                    : plan.sendStatus === 'QUEUED'
+                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Sending to patient</>
+                      : plan.sendStatus === 'FAILED'
+                        ? 'Delivery failed'
+                        : 'Not sent'}
+                </span>
                 <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {plan.date}</span>
               </div>
-              {!plan.sent && (
+              {plan.sendError && <p role="alert" className="mt-3 text-sm text-destructive">{plan.sendError}</p>}
+              {plan.sendStatus !== 'SENT' && plan.sendStatus !== 'QUEUED' && (
                 <Button variant="outline" size="sm" className="mt-4" onClick={() => void sendPlan(plan.id)} disabled={sendingId === plan.id}>
-                  {sendingId === plan.id ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Send className="mr-2 h-3 w-3" />} Send to patient
+                  {sendingId === plan.id ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Send className="mr-2 h-3 w-3" />}
+                  {plan.sendStatus === 'FAILED' ? 'Retry delivery' : 'Send to patient'}
                 </Button>
               )}
             </CardContent>

@@ -33,14 +33,19 @@ export async function listPlans(tenantId: string, query: any) {
   if (query.patientId) where.patientId = query.patientId;
   if (query.status) where.status = query.status;
 
-  const items = await prisma.treatmentPlan.findMany({
-    where,
-    include: { patient: true, stages: { orderBy: { order: 'asc' } } },
-    orderBy: { createdAt: 'desc' },
-    skip: ((query.page || 1) - 1) * (query.limit || 20),
-    take: query.limit || 20,
-  });
-  const total = await prisma.treatmentPlan.count({ where });
+  const [items, total] = await Promise.all([
+    prisma.treatmentPlan.findMany({
+      where,
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } },
+        stages: { orderBy: { order: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: ((query.page || 1) - 1) * (query.limit || 20),
+      take: query.limit || 20,
+    }),
+    prisma.treatmentPlan.count({ where }),
+  ]);
   return { items, total, page: query.page || 1, limit: query.limit || 20 };
 }
 

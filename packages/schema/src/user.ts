@@ -25,6 +25,14 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+export const updateMyProfileSchema = z.object({
+  firstName: z.string().trim().min(1).max(50),
+  lastName: z.string().trim().min(1).max(50),
+  phone: z.string().trim().max(50).optional().nullable(),
+  jobTitle: z.string().trim().max(100).optional().nullable(),
+  department: z.string().trim().max(100).optional().nullable(),
+});
+
 export const resetUserPasswordSchema = z.object({
   newPassword: z.string().min(8).max(100),
 });

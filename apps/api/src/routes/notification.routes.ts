@@ -13,7 +13,7 @@ import { followUpQuerySchema, updateFollowUpSchema } from '@physiocore/schema';
 export default async function notificationRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/notifications/templates',
-    { preHandler: [requirePermission('settings:read')] },
+    { preHandler: [requirePermission('notification:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const templates = await notificationService.listTemplates(request.tenantId);
       return reply.send({ success: true, data: templates });
@@ -22,7 +22,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/notifications/templates',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = createNotificationTemplateSchema.parse(request.body);
       const template = await notificationService.createTemplate(request.tenantId, data);
@@ -33,7 +33,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.patch(
     '/notifications/templates/:id',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = updateNotificationTemplateSchema.parse(request.body);
@@ -45,7 +45,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.delete(
     '/notifications/templates/:id',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       await notificationService.deleteTemplate(request.tenantId, id);
@@ -56,7 +56,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/notifications/channels',
-    { preHandler: [requirePermission('settings:read')] },
+    { preHandler: [requirePermission('notification:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const channels = await notificationService.listChannels(request.tenantId);
       return reply.send({ success: true, data: channels });
@@ -65,7 +65,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/notifications/channels',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = createNotificationChannelSchema.parse(request.body);
       const channel = await notificationService.upsertChannel(request.tenantId, data.type, data);
@@ -76,7 +76,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.patch(
     '/notifications/channels/:id',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = updateNotificationChannelSchema.parse(request.body);
@@ -89,7 +89,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/notifications/follow-ups',
-    { preHandler: [requirePermission('settings:read')] },
+    { preHandler: [requirePermission('notification:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const query = followUpQuerySchema.parse(request.query);
       const result = await notificationService.listFollowUps(request.tenantId, query);
@@ -99,7 +99,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.patch(
     '/notifications/follow-ups/:id',
-    { preHandler: [requirePermission('settings:update')] },
+    { preHandler: [requirePermission('notification:write')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = updateFollowUpSchema.parse(request.body);
@@ -111,7 +111,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/notifications/follow-ups/stats',
-    { preHandler: [requirePermission('settings:read')] },
+    { preHandler: [requirePermission('notification:read')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const stats = await notificationService.getFollowUpStats(request.tenantId);
       return reply.send({ success: true, data: stats });

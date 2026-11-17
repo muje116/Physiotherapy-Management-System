@@ -179,6 +179,7 @@ describe('auth.service', () => {
 
       expect(result.accessToken).toBe('mock-access-token');
       expect(result.user.email).toBe('admin@test.com');
+      expect(result.user.permissions).toContain('patient:read');
     });
 
     it('should throw UnauthorizedError for invalid password', async () => {

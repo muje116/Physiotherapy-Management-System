@@ -1,18 +1,24 @@
 import { FastifyInstance } from 'fastify';
 
 export function setupPerformanceMonitoring(app: FastifyInstance) {
-  let startMap = new WeakMap();
+  const startMap = new WeakMap<object, bigint>();
 
   app.addHook('onRequest', async (request, _reply) => {
     startMap.set(request, process.hrtime.bigint());
   });
 
-  app.addHook('onResponse', async (request, _reply) => {
+  app.addHook('onResponse', async (request, reply) => {
     const start = startMap.get(request);
     if (start) {
       const duration = Number(process.hrtime.bigint() - start) / 1e6;
       if (duration > 1000) {
-        app.log.warn({ method: request.method, url: request.url, durationMs: Math.round(duration) }, 'Slow request detected');
+        app.log.warn({
+          requestId: request.id,
+          method: request.method,
+          route: request.routeOptions.url || 'unmatched',
+          statusCode: reply.statusCode,
+          durationMs: Math.round(duration),
+        }, 'Slow request detected');
       }
     }
   });

@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextDisplay } from '@/components/ui/rich-text-display';
 
 interface TherapistDetail {
   id: string;
@@ -44,10 +45,12 @@ function buildRange() {
   const end = new Date();
   const start = new Date();
   start.setDate(end.getDate() - 30);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
 
   return {
-    startDate: formatDate(start),
-    endDate: formatDate(end),
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
   };
 }
 
@@ -225,7 +228,7 @@ export default function TherapistDetailPage({ params }: { params: { id: string }
               <div className="flex items-center gap-2 text-sm"><Phone className="h-4 w-4 text-muted-foreground" /> {therapist.phone}</div>
               <div className="flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-muted-foreground" /> {therapist.email}</div>
               <div className="flex items-center gap-2 text-sm"><Users className="h-4 w-4 text-muted-foreground" /> {therapist.patients} assigned patients</div>
-              {therapist.bio && <p className="pt-2 text-sm text-muted-foreground">{therapist.bio}</p>}
+              {therapist.bio && <RichTextDisplay value={therapist.bio} className="pt-2 text-sm text-muted-foreground" />}
             </CardContent>
           </Card>
 

@@ -1,10 +1,22 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { createUserSchema, updateUserSchema, userQuerySchema, resetUserPasswordSchema } from '@physiocore/schema';
+import { createUserSchema, updateUserSchema, userQuerySchema, resetUserPasswordSchema, updateMyProfileSchema } from '@physiocore/schema';
 import * as userService from '../services/user.service';
 import { requirePermission } from '../middleware/permissions';
 import { auditLog } from '../middleware/audit';
 
 export default async function userRoutes(fastify: FastifyInstance) {
+  fastify.get('/users/me', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await userService.getById(request.tenantId, request.user.id);
+    return reply.send({ success: true, data: user });
+  });
+
+  fastify.patch('/users/me', async (request: FastifyRequest, reply: FastifyReply) => {
+    const data = updateMyProfileSchema.parse(request.body);
+    const user = await userService.update(request.tenantId, request.user.id, data);
+    auditLog('UPDATE_PROFILE', 'USER')(request, reply, { id: request.user.id, after: data });
+    return reply.send({ success: true, data: user });
+  });
+
   fastify.get(
     '/users',
     { preHandler: [requirePermission('settings:read')] },

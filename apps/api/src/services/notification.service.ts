@@ -208,47 +208,6 @@ export async function sendClientTaskNotification(taskId: string, tenantId?: stri
   return true;
 }
 
-export async function sendExercisePlanNotification(tenantId: string, planId: string) {
-  const plan = await prisma.exercisePlan.findFirst({
-    where: { id: planId, tenantId },
-    include: { patient: true, items: { orderBy: { order: 'asc' } } },
-  });
-  if (!plan || !plan.patient) return false;
-
-  const template = await findMessageTemplate(tenantId, 'EXERCISE_PLAN_SENT');
-  const vars = {
-    patientName: plan.patient.firstName,
-    planName: plan.name,
-    exerciseCount: String(plan.items.length),
-    link: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/portal/exercise-plans`,
-  };
-  const body = template
-    ? renderTemplate(template.body, vars)
-    : `Hello ${vars.patientName}, your exercise plan "${vars.planName}" is ready in the patient portal.`;
-  const channels = template?.channel?.length ? template.channel : ['EMAIL'];
-  let sent = false;
-
-  for (const channel of channels) {
-    const normalizedChannel = channel as 'EMAIL' | 'SMS' | 'WHATSAPP';
-    const to = normalizedChannel === 'EMAIL' ? plan.patient.email : plan.patient.phone;
-    if (!to || !['EMAIL', 'SMS', 'WHATSAPP'].includes(normalizedChannel)) continue;
-
-    sent = (await sendNotification({
-      to,
-      subject: renderTemplate(template?.subject || `Exercise plan: ${plan.name}`, vars),
-      body,
-      channel: normalizedChannel,
-      tenantId,
-      patientId: plan.patientId,
-    })) || sent;
-  }
-
-  if (sent) {
-    await prisma.exercisePlan.update({ where: { id: planId }, data: { sentAt: new Date() } });
-  }
-  return sent;
-}
-
 export async function createNoShowFollowUp(appointmentId: string) {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -392,14 +351,16 @@ export async function listFollowUps(tenantId: string, query: any) {
   if (query.type) where.type = query.type;
   if (query.patientId) where.patientId = query.patientId;
 
-  const items = await prisma.followUp.findMany({
-    where,
-    include: { patient: true, therapist: { include: { user: true } } },
-    orderBy: { createdAt: 'desc' },
-    skip: ((query.page || 1) - 1) * (query.limit || 20),
-    take: query.limit || 20,
-  });
-  const total = await prisma.followUp.count({ where });
+  const [items, total] = await Promise.all([
+    prisma.followUp.findMany({
+      where,
+      include: { patient: true, therapist: { include: { user: true } } },
+      orderBy: { createdAt: 'desc' },
+      skip: ((query.page || 1) - 1) * (query.limit || 20),
+      take: query.limit || 20,
+    }),
+    prisma.followUp.count({ where }),
+  ]);
   return { items, total, page: query.page || 1, limit: query.limit || 20 };
 }
 
@@ -416,10 +377,12 @@ export async function updateFollowUp(tenantId: string, id: string, data: any) {
 }
 
 export async function getFollowUpStats(tenantId: string) {
-  const total = await prisma.followUp.count({ where: { tenantId } });
-  const pending = await prisma.followUp.count({ where: { tenantId, status: 'PENDING' } });
-  const rescheduled = await prisma.followUp.count({ where: { tenantId, status: 'RESCHEDULED' } });
-  const closed = await prisma.followUp.count({ where: { tenantId, status: 'CLOSED' } });
-  const contacted = await prisma.followUp.count({ where: { tenantId, status: 'CONTACTED' } });
+  const [total, pending, rescheduled, closed, contacted] = await Promise.all([
+    prisma.followUp.count({ where: { tenantId } }),
+    prisma.followUp.count({ where: { tenantId, status: 'PENDING' } }),
+    prisma.followUp.count({ where: { tenantId, status: 'RESCHEDULED' } }),
+    prisma.followUp.count({ where: { tenantId, status: 'CLOSED' } }),
+    prisma.followUp.count({ where: { tenantId, status: 'CONTACTED' } }),
+  ]);
   return { total, pending, rescheduled, closed, contacted, reengagementRate: total ? Math.round((rescheduled / total) * 100) : 0 };
 }

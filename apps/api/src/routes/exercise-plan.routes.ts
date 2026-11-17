@@ -55,7 +55,7 @@ export default async function exercisePlanRoutes(fastify: FastifyInstance) {
       const { planId } = request.params as { planId: string };
       const plan = await exercisePlanService.send(request.tenantId, planId);
       auditLog('SEND', 'EXERCISE_PLAN')(request, reply, { id: planId });
-      return reply.send({ success: true, data: { message: 'Exercise plan queued for sending' } });
+      return reply.status(202).send({ success: true, data: plan });
     }
   );
 

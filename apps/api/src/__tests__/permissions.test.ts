@@ -28,6 +28,8 @@ describe('PERMISSIONS', () => {
       'settings:read',
       'settings:update',
       'tenant:billing',
+      'notification:read',
+      'notification:write',
     ];
 
     for (const key of expectedKeys) {
@@ -85,6 +87,11 @@ describe('PERMISSIONS', () => {
     for (const key of denied) {
       expect(PERMISSIONS[key]).not.toContain(Role.FRONT_DESK);
     }
+  });
+
+  it('should allow FRONT_DESK to read notifications without granting write access', () => {
+    expect(PERMISSIONS['notification:read']).toContain(Role.FRONT_DESK);
+    expect(PERMISSIONS['notification:write']).not.toContain(Role.FRONT_DESK);
   });
 
   it('should allow BILLING only finance permissions', () => {

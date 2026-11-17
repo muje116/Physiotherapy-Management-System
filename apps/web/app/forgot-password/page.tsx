@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { HeartPulse, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { AuthShell } from '@/components/auth-shell';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -31,64 +31,69 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center space-y-4">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-            <h2 className="text-xl font-semibold">Check your email</h2>
-            <p className="text-sm text-muted-foreground">
-              If an account exists for {email}, you will receive a password reset link shortly.
-            </p>
-            <Link href="/login" className="text-sm text-primary hover:underline inline-flex items-center gap-1">
-              <ArrowLeft className="h-3 w-3" /> Back to login
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell
+        eyebrow="Check your inbox"
+        title="A fresh start is on its way."
+        description={`If an account exists for ${email}, you will receive a password reset link shortly.`}
+        icon={<CheckCircle2 className="h-5 w-5" />}
+      >
+        <div className="rounded-2xl border border-[#dcebdd] bg-[#f5faf5] p-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e5f2e7] text-[#418262]">
+              <MailCheck className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-[#315848]">Check your email</p>
+              <p className="mt-1 text-sm leading-6 text-[#74877f]">Follow the secure link in your inbox to choose a new password.</p>
+            </div>
+          </div>
+        </div>
+        <Link href="/login" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#438262] transition hover:text-[#1d624b]">
+          <ArrowLeft className="h-4 w-4" /> Back to sign in
+        </Link>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-2">
-          <div className="flex justify-center mb-2">
-            <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-              <HeartPulse className="h-7 w-7 text-white" />
-            </div>
+    <AuthShell
+      eyebrow="Password recovery"
+      title="Let’s get you back in."
+      description="Enter the email address linked to your practice and we’ll send a secure reset link."
+      icon={<MailCheck className="h-5 w-5" />}
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
-          <CardTitle className="text-xl">Reset Password</CardTitle>
-          <CardDescription>Enter your email and we&apos;ll send you a reset link</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@practice.co.za"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-            <Button className="w-full" size="lg" type="submit" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {loading ? 'Sending...' : 'Send Reset Link'}
-            </Button>
-            <div className="text-center">
-              <Link href="/login" className="text-xs text-primary hover:underline">
-                Back to login
-              </Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-sm font-semibold text-[#315848]">Email address</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@practice.co.za"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            className="h-12 rounded-xl border-[#dbe5dc] bg-[#fbfcfa] px-4 focus-visible:ring-[#4a956a]"
+          />
+        </div>
+        <Button
+          className="h-12 w-full rounded-xl bg-[#1d624b] text-white shadow-lg shadow-[#1d624b]/15 transition hover:bg-[#174f3d]"
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {loading ? 'Sending...' : <>Send reset link <ArrowRight className="ml-2 h-4 w-4" /></>}
+        </Button>
+      </form>
+      <Link href="/login" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#438262] transition hover:text-[#1d624b]">
+        <ArrowLeft className="h-4 w-4" /> Back to sign in
+      </Link>
+    </AuthShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Search } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getApiErrorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextDisplay } from '@/components/ui/rich-text-display';
 
 interface AppointmentOption {
   id: string;
@@ -103,7 +104,7 @@ const emptyForm = (): ClinicalForm => ({
 });
 
 function errorMessage(error: any) {
-  return error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to save SOAP note';
+  return getApiErrorMessage(error, 'Unable to save SOAP note');
 }
 
 function formatDate(value: string) {
@@ -481,7 +482,7 @@ export default function SoapNotesPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[240px] truncate">{note.complaint || note.subjective}</TableCell>
+                  <TableCell className="max-w-[240px] truncate"><RichTextDisplay value={note.complaint || note.subjective} className="truncate" /></TableCell>
                   <TableCell><StatusBadge status={note.signed ? 'SIGNED' : 'UNSIGNED'} /></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openNote(note)}>View</Button>

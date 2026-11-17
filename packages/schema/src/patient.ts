@@ -50,6 +50,7 @@ export const patientQuerySchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   therapistId: recordIdSchema.optional(),
   isActive: z.coerce.boolean().optional(),
+  compact: z.coerce.boolean().optional(),
 });
 
 export type CreatePatientInput = z.infer<typeof createPatientSchema>;

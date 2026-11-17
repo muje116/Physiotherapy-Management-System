@@ -38,6 +38,7 @@ async function main() {
   await import('./jobs/report.jobs');
   await import('./jobs/medical-aid.jobs');
   await import('./jobs/payment-request.jobs');
+  await import('./jobs/exercise-plan.jobs');
   const { reminderQueue, invoiceQueue, medicalAidQueue, paymentRequestQueue } = await import('./queues');
 
   // Register repeatable jobs

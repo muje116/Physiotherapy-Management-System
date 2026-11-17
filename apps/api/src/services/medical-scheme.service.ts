@@ -45,14 +45,16 @@ export async function listClaims(tenantId: string, query: any) {
   if (query.schemeId) where.schemeId = query.schemeId;
   if (query.patientId) where.patientId = query.patientId;
 
-  const items = await prisma.schemeClaim.findMany({
-    where,
-    include: { patient: true, scheme: true, invoice: true },
-    orderBy: { createdAt: 'desc' },
-    skip: ((query.page || 1) - 1) * (query.limit || 20),
-    take: query.limit || 20,
-  });
-  const total = await prisma.schemeClaim.count({ where });
+  const [items, total] = await Promise.all([
+    prisma.schemeClaim.findMany({
+      where,
+      include: { patient: true, scheme: true, invoice: true },
+      orderBy: { createdAt: 'desc' },
+      skip: ((query.page || 1) - 1) * (query.limit || 20),
+      take: query.limit || 20,
+    }),
+    prisma.schemeClaim.count({ where }),
+  ]);
   return { items, total, page: query.page || 1, limit: query.limit || 20 };
 }
 

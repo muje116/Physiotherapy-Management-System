@@ -10,14 +10,16 @@ export async function listPayments(tenantId: string, query: any) {
     where.paidAt = { gte: new Date(query.startDate), lte: new Date(query.endDate) };
   }
 
-  const items = await prisma.payment.findMany({
-    where,
-    include: { patient: true, invoice: true, paymentMethod: true },
-    orderBy: { paidAt: 'desc' },
-    skip: ((query.page || 1) - 1) * (query.limit || 20),
-    take: query.limit || 20,
-  });
-  const total = await prisma.payment.count({ where });
+  const [items, total] = await Promise.all([
+    prisma.payment.findMany({
+      where,
+      include: { patient: true, invoice: true, paymentMethod: true },
+      orderBy: { paidAt: 'desc' },
+      skip: ((query.page || 1) - 1) * (query.limit || 20),
+      take: query.limit || 20,
+    }),
+    prisma.payment.count({ where }),
+  ]);
   return { items, total, page: query.page || 1, limit: query.limit || 20 };
 }
 

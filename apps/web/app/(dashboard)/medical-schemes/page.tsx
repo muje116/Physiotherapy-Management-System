@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Loader2, Building2, FileText, CheckCircle, XCircle, Send } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { formatCurrency } from '@/lib/utils';
 
 interface MedicalScheme {
   id: string; name: string; code: string; tariffVersion: string; contactNumber: string; email: string; isActive: boolean;
@@ -72,6 +74,8 @@ function formatDate(value?: string | null) {
 }
 
 export default function MedicalSchemesPage() {
+  const { user } = useAuth();
+  const currency = user?.tenant?.currency || 'ZAR';
   const [schemes, setSchemes] = useState<MedicalScheme[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [patients, setPatients] = useState<PatientOption[]>([]);
@@ -330,7 +334,7 @@ export default function MedicalSchemesPage() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">R {report.approvedAmount.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{formatCurrency(report.approvedAmount, currency)}</p>
             </CardContent>
           </Card>
         </div>
@@ -366,7 +370,7 @@ export default function MedicalSchemesPage() {
               <Select
                 options={claimableInvoices.map((invoice) => ({
                   value: invoice.id,
-                  label: `${invoice.invoiceNumber} - R ${invoice.amount.toLocaleString()}`,
+                  label: `${invoice.invoiceNumber} - ${formatCurrency(invoice.amount, currency)}`,
                 }))}
                 value={claimInvoiceId}
                 onChange={(event) => selectClaimInvoice(event.target.value)}
@@ -536,7 +540,7 @@ export default function MedicalSchemesPage() {
                       <TableCell className="font-medium">{c.patientName}</TableCell>
                       <TableCell>{c.schemeName}</TableCell>
                       <TableCell>{c.invoiceNumber}</TableCell>
-                      <TableCell>R {c.amount.toLocaleString()}</TableCell>
+                      <TableCell>{formatCurrency(c.amount, currency)}</TableCell>
                       <TableCell><StatusBadge status={c.status} /></TableCell>
                       <TableCell>{c.submittedDate || '-'}</TableCell>
                       <TableCell>{c.responseDate || '-'}</TableCell>

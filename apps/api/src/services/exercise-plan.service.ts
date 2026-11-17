@@ -1,7 +1,8 @@
 import { prisma } from '@physiocore/db';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { NotFoundError, AppError } from '../utils/errors';
 import { PaginatedResult } from '../types';
-import { sendExercisePlanNotification } from './notification.service';
+import { exercisePlanQueue } from '../queues/exercise-plan.queue';
+import { sendNotification } from './notification.service';
 
 export async function list(tenantId: string, query: { page: number; limit: number }): Promise<PaginatedResult<any>> {
   const where = { tenantId };
@@ -82,11 +83,67 @@ export async function update(tenantId: string, planId: string, data: { name?: st
 }
 
 export async function send(tenantId: string, planId: string) {
-  const plan = await prisma.exercisePlan.findFirst({ where: { id: planId, tenantId } });
+  const plan = await prisma.exercisePlan.findFirst({
+    where: { id: planId, tenantId },
+    select: { id: true, patientId: true, sendStatus: true },
+  });
   if (!plan) throw new NotFoundError('Exercise plan not found');
 
-  const sent = await sendExercisePlanNotification(tenantId, planId);
-  if (!sent) throw new ValidationError('Exercise plan could not be sent; check the patient contact details and notification channel');
+  if (plan.sendStatus === 'QUEUED') return plan;
+
+  const claimed = await prisma.exercisePlan.updateMany({
+    where: { id: planId, tenantId, sendStatus: { not: 'QUEUED' } },
+    data: { sendStatus: 'QUEUED', sendError: null, sentAt: null },
+  });
+  if (claimed.count === 0) {
+    return prisma.exercisePlan.findFirst({
+      where: { id: planId, tenantId },
+      select: { id: true, patientId: true, sendStatus: true },
+    });
+  }
+
+  try {
+    await exercisePlanQueue.add('send-exercise-plan', { planId, tenantId, patientId: plan.patientId }, {
+      jobId: `exercise-plan-${planId}-${Date.now()}`,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+    });
+  } catch {
+    // Redis is an optional convenience in development environments. Try the
+    // configured email channel inline so a missing queue does not prevent a
+    // therapist from delivering a plan to a patient.
+    const fullPlan = await prisma.exercisePlan.findFirst({
+      where: { id: planId, tenantId, patientId: plan.patientId },
+      include: { patient: { select: { id: true, firstName: true, email: true } }, items: { select: { id: true } } },
+    });
+    const delivered = fullPlan?.patient.email
+      ? await sendNotification({
+        to: fullPlan.patient.email,
+        subject: `Exercise plan: ${fullPlan.name}`,
+        body: `Hello ${fullPlan.patient.firstName}, your exercise plan “${fullPlan.name}” with ${fullPlan.items.length} exercise(s) is ready in the patient portal.`,
+        channel: 'EMAIL',
+        tenantId,
+        patientId: plan.patientId,
+      })
+      : false;
+
+    if (delivered) {
+      await prisma.exercisePlan.updateMany({
+        where: { id: planId, tenantId, sendStatus: 'QUEUED' },
+        data: { sendStatus: 'SENT', sentAt: new Date(), sendError: null },
+      });
+      return prisma.exercisePlan.findFirst({ where: { id: planId, tenantId } });
+    }
+
+    const message = 'Background delivery is unavailable and immediate email delivery failed. Configure email in Settings and restore the Redis worker, then try again.';
+    await prisma.exercisePlan.updateMany({
+      where: { id: planId, tenantId, sendStatus: 'QUEUED' },
+      data: { sendStatus: 'FAILED', sendError: message },
+    });
+    throw new AppError(503, 'QUEUE_UNAVAILABLE', message);
+  }
 
   return prisma.exercisePlan.findFirst({ where: { id: planId, tenantId } });
 }

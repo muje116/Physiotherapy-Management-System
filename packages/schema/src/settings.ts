@@ -6,7 +6,7 @@ export const updateTenantSchema = z.object({
   vatNumber: z.string().optional(),
   timezone: z.string().optional(),
   currency: z.string().optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: z.string().trim().url().or(z.literal('')).optional(),
 });
 
 export const updateSettingsSchema = z.object({

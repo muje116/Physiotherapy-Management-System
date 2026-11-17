@@ -10,6 +10,7 @@ interface PatientQuery {
   status?: string;
   therapistId?: string;
   isActive?: boolean;
+  compact?: boolean;
 }
 
 function buildPatientFilter(tenantId: string, userId?: string, userRole?: string): any {
@@ -42,16 +43,24 @@ export async function list(tenantId: string, query: PatientQuery, userId?: strin
   }
 
   const [items, total] = await Promise.all([
-    prisma.patient.findMany({
-      where,
-      skip: (query.page - 1) * query.limit,
-      take: query.limit,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        therapists: { include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } } },
-        _count: { select: { appointments: true, invoices: true } },
-      },
-    }),
+    query.compact
+      ? prisma.patient.findMany({
+          where,
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, firstName: true, lastName: true, patientCode: true },
+        })
+      : prisma.patient.findMany({
+          where,
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            therapists: { include: { therapist: { include: { user: { select: { firstName: true, lastName: true } } } } } },
+            _count: { select: { appointments: true, invoices: true } },
+          },
+        }),
     prisma.patient.count({ where }),
   ]);
 

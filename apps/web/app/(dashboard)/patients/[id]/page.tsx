@@ -3,6 +3,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Activity, Edit, Mail, MapPin, Phone, Calendar, Loader2, Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { formatCurrency } from '@/lib/utils';
+import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { StatusBadge } from '@/components/status-badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -240,6 +243,8 @@ function formatAddress(address: unknown) {
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { user } = useAuth();
+  const currency = user?.tenant?.currency || 'ZAR';
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -349,7 +354,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           invoices: (invoicesRes.data.data || []).map((invoice: any) => ({
             id: invoice.invoiceNumber,
             date: formatDate(invoice.createdAt),
-            amount: `R ${Number(invoice.total).toLocaleString()}`,
+            amount: formatCurrency(Number(invoice.total), currency),
             status: invoice.status,
           })),
           exercisePlans: (plansRes.data.data || []).map((plan: any) => ({
@@ -978,7 +983,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                       <TableCell className="font-medium">{measure.type}</TableCell>
                       <TableCell>{measure.score} / {measure.maxScore}</TableCell>
                       <TableCell>{measure.percentage.toFixed(1)}%</TableCell>
-                      <TableCell className="max-w-[240px] truncate">{measure.notes || '-'}</TableCell>
+                      <TableCell className="max-w-[240px] truncate">{measure.notes ? <RichTextDisplay value={measure.notes} className="truncate" /> : '-'}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" onClick={() => openEditOutcome(measure)}><Edit className="mr-1 h-3 w-3" /> Edit</Button>
                         <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void deleteOutcome(measure.id)}><Trash2 className="mr-1 h-3 w-3" /> Delete</Button>
@@ -1117,7 +1122,7 @@ function ClinicalField({ label, value }: { label: string; value?: string | null 
   return (
     <div className="min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm">{value || '-'}</p>
+      {value ? <RichTextDisplay value={value} className="mt-1 text-sm" /> : <p className="mt-1 text-sm">-</p>}
     </div>
   );
 }

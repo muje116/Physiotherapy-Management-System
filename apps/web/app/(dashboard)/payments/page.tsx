@@ -16,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, Loader2, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { formatCurrency } from '@/lib/utils';
 
 interface PaymentMethod {
   id: string; name: string; type: string; feePercent: number; isActive: boolean;
@@ -85,6 +87,8 @@ function formatDate(value?: string | null) {
 }
 
 export default function PaymentsPage() {
+  const { user } = useAuth();
+  const currency = user?.tenant?.currency || 'ZAR';
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [patients, setPatients] = useState<PatientOption[]>([]);
@@ -383,7 +387,7 @@ export default function PaymentsPage() {
                       .filter((invoice) => !['PAID', 'VOID'].includes(invoice.status))
                       .map((invoice) => ({
                         value: invoice.id,
-                        label: `${invoice.invoiceNumber} - R ${invoice.total.toLocaleString()} (${invoice.status.replace(/_/g, ' ')})`,
+                        label: `${invoice.invoiceNumber} - ${formatCurrency(invoice.total, currency)} (${invoice.status.replace(/_/g, ' ')})`,
                       }))}
                     value={paymentInvoiceId}
                     onChange={(event) => handleInvoiceChange(event.target.value)}
@@ -439,7 +443,7 @@ export default function PaymentsPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">R {summary.todayTotal.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{formatCurrency(summary.todayTotal, currency)}</p>
             </CardContent>
           </Card>
           <Card>
@@ -448,7 +452,7 @@ export default function PaymentsPage() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">R {summary.allTimeTotal.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{formatCurrency(summary.allTimeTotal, currency)}</p>
             </CardContent>
           </Card>
           <Card className="lg:col-span-2">
@@ -460,7 +464,7 @@ export default function PaymentsPage() {
                 {summary.byMethod.map(bm => (
                   <div key={bm.method} className="flex items-center justify-between text-sm">
                     <span>{bm.method.replace(/_/g, ' ')}</span>
-                    <span className="font-medium">R {bm.total.toLocaleString()} ({bm.count} txns)</span>
+                    <span className="font-medium">{formatCurrency(bm.total, currency)} ({bm.count} txns)</span>
                   </div>
                 ))}
                 {summary.byMethod.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
@@ -591,7 +595,7 @@ export default function PaymentsPage() {
                       <TableCell>{p.date}</TableCell>
                       <TableCell className="font-medium">{p.patientName}</TableCell>
                       <TableCell>{p.invoiceNumber}</TableCell>
-                      <TableCell>R {p.amount.toLocaleString()}</TableCell>
+                      <TableCell>{formatCurrency(p.amount, currency)}</TableCell>
                       <TableCell><Badge variant="outline">{p.method.replace(/_/g, ' ')}</Badge></TableCell>
                       <TableCell>{p.reference || '-'}</TableCell>
                       <TableCell><StatusBadge status={p.status} /></TableCell>
@@ -623,7 +627,7 @@ export default function PaymentsPage() {
                       <Select
                         options={invoices.filter((invoice) => !['PAID', 'VOID'].includes(invoice.status)).map((invoice) => ({
                           value: invoice.id,
-                          label: `${invoice.invoiceNumber} - R ${invoice.total.toLocaleString()}`,
+                          label: `${invoice.invoiceNumber} - ${formatCurrency(invoice.total, currency)}`,
                         }))}
                         value={requestInvoiceId}
                         onChange={(event) => handleRequestInvoiceChange(event.target.value)}

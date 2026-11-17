@@ -1,5 +1,6 @@
 import { prisma } from '@physiocore/db';
-import { NotFoundError } from '../utils/errors';
+import { AppError, NotFoundError } from '../utils/errors';
+import { sendEmail } from './integrations/email.service';
 
 export async function getTenant(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
@@ -77,6 +78,10 @@ export async function updateIntegration(tenantId: string, key: string, data: { e
       break;
     case 'email':
       updateData.emailProvider = data.enabled ? (data.apiKey ? 'custom' : null) : null;
+      await prisma.notificationChannel.updateMany({
+        where: { tenantId, type: 'RESEND_EMAIL' },
+        data: { isActive: data.enabled },
+      });
       break;
     case 'medicalAid':
       updateData.medicalAidSwitch = data.enabled;
@@ -98,4 +103,54 @@ export async function updateIntegration(tenantId: string, key: string, data: { e
       xeroIntegration: true,
     },
   });
+}
+
+export async function getEmailSettings(tenantId: string) {
+  const channel = await prisma.notificationChannel.findFirst({
+    where: { tenantId, type: 'RESEND_EMAIL' },
+    select: { id: true, from: true, isActive: true, apiKey: true },
+  });
+  return {
+    from: channel?.from || process.env.EMAIL_FROM || '',
+    enabled: channel?.isActive ?? false,
+    hasApiKey: Boolean(channel?.apiKey || process.env.RESEND_API_KEY),
+  };
+}
+
+export async function updateEmailSettings(tenantId: string, data: { apiKey?: string; from: string; enabled: boolean }) {
+  const existing = await prisma.notificationChannel.findFirst({ where: { tenantId, type: 'RESEND_EMAIL' } });
+  const channelData = {
+    from: data.from || null,
+    isActive: data.enabled,
+    ...(data.apiKey?.trim() ? { apiKey: data.apiKey.trim() } : {}),
+  };
+
+  if (existing) {
+    await prisma.notificationChannel.update({ where: { id: existing.id }, data: channelData });
+  } else {
+    await prisma.notificationChannel.create({
+      data: { tenantId, type: 'RESEND_EMAIL', ...channelData, apiKey: data.apiKey?.trim() || null },
+    });
+  }
+
+  await prisma.tenantSettings.updateMany({ where: { tenantId }, data: { emailProvider: data.enabled ? 'RESEND' : null } });
+  return getEmailSettings(tenantId);
+}
+
+export async function sendEmailTest(tenantId: string, to: string) {
+  const channel = await prisma.notificationChannel.findFirst({ where: { tenantId, type: 'RESEND_EMAIL', isActive: true } });
+  const apiKey = channel?.apiKey || process.env.RESEND_API_KEY;
+  if (!apiKey || apiKey === 'your_resend_api_key') {
+    throw new AppError(503, 'EMAIL_NOT_CONFIGURED', 'Add a Resend API key and enable email delivery before sending a test message.');
+  }
+
+  const delivered = await sendEmail({
+    to,
+    subject: 'Test email from your physiotherapy clinic',
+    body: '<p>Your clinic email settings are working.</p>',
+    from: channel?.from || process.env.EMAIL_FROM,
+  }, { apiKey });
+
+  if (!delivered) throw new AppError(503, 'EMAIL_DELIVERY_FAILED', 'Resend could not deliver the test email. Check the sender address and API key.');
+  return { delivered: true };
 }

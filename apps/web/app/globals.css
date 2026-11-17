@@ -4,28 +4,28 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 140 20% 98%;
+    --foreground: 154 42% 16%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 154 42% 16%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --popover-foreground: 154 42% 16%;
+    --primary: 151 54% 25%;
+    --primary-foreground: 140 40% 98%;
+    --secondary: 132 28% 94%;
+    --secondary-foreground: 154 42% 16%;
+    --muted: 132 20% 95%;
+    --muted-foreground: 150 10% 47%;
+    --accent: 135 28% 93%;
+    --accent-foreground: 154 42% 16%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --radius: 0.5rem;
-    --sidebar: 222 47% 11%;
-    --sidebar-foreground: 210 40% 98%;
+    --border: 135 17% 89%;
+    --input: 135 17% 89%;
+    --ring: 151 54% 35%;
+    --radius: 0.8rem;
+    --sidebar: 154 48% 21%;
+    --sidebar-foreground: 140 33% 96%;
   }
 
   * {
@@ -61,3 +61,17 @@
     --sidebar-foreground: 210 40% 98%;
   }
 }
+ .rich-text-editor:empty::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.rich-text-editor p { margin: 0 0 0.35rem; }
+.rich-text-editor ul { list-style: disc; padding-left: 1.25rem; }
+.rich-text-editor ol { list-style: decimal; padding-left: 1.25rem; }
+.rich-text-editor blockquote { border-left: 3px solid #cbd5e1; margin: 0.5rem 0; padding-left: 0.75rem; color: #64748b; }
+.rich-text-display p { margin: 0 0 0.35rem; }
+.rich-text-display ul { list-style: disc; padding-left: 1.25rem; }
+.rich-text-display ol { list-style: decimal; padding-left: 1.25rem; }
+.rich-text-display blockquote { border-left: 3px solid #cbd5e1; margin: 0.5rem 0; padding-left: 0.75rem; color: #64748b; }

@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getApiErrorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { RichTextEditor } from '@/components/ui/textarea';
+import { CountryAddressFields } from '@/components/patients/country-address-fields';
 
 export interface PatientFormPatient {
   id?: string;
@@ -164,7 +166,7 @@ function textToList(value: string) {
 }
 
 function errorMessage(error: any) {
-  return error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to save patient';
+  return getApiErrorMessage(error, 'Unable to save patient');
 }
 
 export function PatientFormDialog({
@@ -181,17 +183,29 @@ export function PatientFormDialog({
   const [form, setForm] = useState<PatientFormState>(() => formFromPatient(patient));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [medicalInsuranceOptions, setMedicalInsuranceOptions] = useState<Array<{ value: string; label: string }>>([]);
   const isEditing = Boolean(patient?.id);
 
   useEffect(() => {
     if (open) {
       setForm(formFromPatient(patient));
       setError(null);
+      api.get('/medical-schemes')
+        .then(({ data }) => setMedicalInsuranceOptions((data.data || []).filter((scheme: any) => scheme.isActive !== false).map((scheme: any) => ({ value: scheme.name, label: scheme.name }))))
+        .catch(() => setMedicalInsuranceOptions([]));
     }
   }, [open, patient]);
 
   const updateField = (field: keyof PatientFormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateAddressLocation = (field: 'country' | 'province' | 'district', value: string) => {
+    setForm((current) => {
+      if (field === 'country') return { ...current, country: value, state: '', city: '' };
+      if (field === 'province') return { ...current, state: value, city: '' };
+      return { ...current, city: value };
+    });
   };
 
   const savePatient = async (event: FormEvent<HTMLFormElement>) => {
@@ -290,10 +304,13 @@ export function PatientFormDialog({
             </div>
             <Field label="Physical address" value={form.street} onChange={(value) => updateField('street', value)} />
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="City" value={form.city} onChange={(value) => updateField('city', value)} />
-              <Field label="State / province" value={form.state} onChange={(value) => updateField('state', value)} />
+              <CountryAddressFields
+                country={form.country}
+                province={form.state}
+                district={form.city}
+                onChange={updateAddressLocation}
+              />
               <Field label="Postal code" value={form.postalCode} onChange={(value) => updateField('postalCode', value)} />
-              <Field label="Country" value={form.country} onChange={(value) => updateField('country', value)} />
             </div>
           </section>
 
@@ -321,7 +338,18 @@ export function PatientFormDialog({
                   placeholder="Select payment method"
                 />
               </div>
-              <Field label="Insurance / medical aid" value={form.medicalAidName} onChange={(value) => updateField('medicalAidName', value)} />
+              <div className="space-y-2">
+                <Label>Insurance / medical aid</Label>
+                <Select
+                  options={form.medicalAidName && !medicalInsuranceOptions.some((option) => option.value === form.medicalAidName)
+                    ? [{ value: form.medicalAidName, label: `${form.medicalAidName} (saved value) ` }, ...medicalInsuranceOptions]
+                    : medicalInsuranceOptions}
+                  value={form.medicalAidName}
+                  placeholder={medicalInsuranceOptions.length ? 'Select medical insurance' : 'No active medical insurance configured'}
+                  onChange={(event) => updateField('medicalAidName', event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Administrators maintain this list in Medical Schemes.</p>
+              </div>
               <Field label="Member number" value={form.medicalAidNo} onChange={(value) => updateField('medicalAidNo', value)} />
             </div>
             <label className="flex items-start gap-2 text-sm">
@@ -362,8 +390,8 @@ export function PatientFormDialog({
             </div>
             <div className="space-y-2">
               <Label>Clinical precautions / alerts</Label>
-              <textarea
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <RichTextEditor
+                rows={3}
                 value={form.clinicalPrecautions}
                 onChange={(event) => updateField('clinicalPrecautions', event.target.value)}
                 placeholder="Falls risk, contraindications, communication needs, or other alerts"

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
@@ -13,6 +14,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Loader2, ChevronDown, ChevronRight, CheckCircle2, Circle, XCircle } from 'lucide-react';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 
 interface TreatmentPlanGoal {
   id?: string; description: string; targetDate: string; achieved?: boolean;
@@ -79,7 +81,7 @@ export default function TreatmentPlansPage() {
     setError(null);
     Promise.all([
       api.get('/treatment-plans', { params: { page: 1, limit: 100, status: statusFilter || undefined } }),
-      api.get('/patients'),
+      api.get('/patients', { params: { page: 1, limit: 100, compact: true } }),
     ]).then(([tpRes, ptRes]) => {
       const plansData = (tpRes.data.data || []).map((p: any) => ({
         id: p.id,
@@ -104,7 +106,7 @@ export default function TreatmentPlansPage() {
       }));
       setPlans(plansData);
       setPatients(ptRes.data.data || []);
-    }).catch(err => setError(err.message))
+    }).catch(err => setError(err.message || err.response?.data?.error?.message || 'Unable to load treatment plans'))
       .finally(() => setLoading(false));
   }, [statusFilter]);
 
@@ -143,7 +145,9 @@ export default function TreatmentPlansPage() {
       })) : [{ name: '', description: '', durationWeeks: 4, order: 1 }]);
       setPlanDialog(true);
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || err.response?.data?.error?.message || 'Unable to load treatment plan';
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -170,9 +174,12 @@ export default function TreatmentPlansPage() {
       }
       setPlanDialog(false);
       resetPlanForm();
-      fetchData();
+      toast.success(editPlanId ? 'Treatment plan updated' : 'Treatment plan created');
+      void fetchData();
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || err.response?.data?.error?.message || 'Unable to save treatment plan';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -181,9 +188,12 @@ export default function TreatmentPlansPage() {
   const completePlan = async (planId: string) => {
     try {
       await api.post(`/treatment-plans/${planId}/complete`);
-      fetchData();
+      toast.success('Treatment plan completed');
+      void fetchData();
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || err.response?.data?.error?.message || 'Unable to complete treatment plan';
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -196,7 +206,9 @@ export default function TreatmentPlansPage() {
         return { ...p, stages, completedStageCount: stages.filter(s => s.progress === 100).length };
       }));
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || err.response?.data?.error?.message || 'Unable to update treatment stage';
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -223,8 +235,6 @@ export default function TreatmentPlansPage() {
   );
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-64" /></div>;
-  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
-
   return (
     <div className="space-y-6">
       <div>
@@ -232,7 +242,12 @@ export default function TreatmentPlansPage() {
         <p className="text-muted-foreground">Create and manage patient treatment plans</p>
       </div>
 
-      {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <span>{error}</span>
+          <Button size="sm" variant="outline" onClick={() => fetchData()}>Retry</Button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -406,7 +421,7 @@ export default function TreatmentPlansPage() {
                                     <span className="font-medium">{stage.name}</span>
                                     <span className="text-muted-foreground">{stage.durationWeeks} weeks</span>
                                   </div>
-                                  {stage.description && <p className="text-xs text-muted-foreground">{stage.description}</p>}
+                                  {stage.description && <RichTextDisplay value={stage.description} className="text-xs text-muted-foreground" />}
                                   <div className="flex items-center gap-2">
                                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                       <div className={`h-full rounded-full transition-all ${STAGE_PROGRESS_COLORS[Math.min(Math.floor((stage.progress || 0) / 25), 3)]}`}
@@ -453,7 +468,7 @@ export default function TreatmentPlansPage() {
                         {plan.notes && (
                           <div className="mt-6">
                             <h4 className="mb-2 text-sm font-semibold">Treatment approach and notes</h4>
-                            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{plan.notes}</p>
+                            <RichTextDisplay value={plan.notes} className="text-sm text-muted-foreground" />
                           </div>
                         )}
                       </TableCell>

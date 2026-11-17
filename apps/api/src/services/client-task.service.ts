@@ -8,14 +8,16 @@ export async function listTasks(tenantId: string, query: any) {
   if (query.status) where.status = query.status;
   if (query.taskType) where.taskType = query.taskType;
 
-  const items = await prisma.clientTask.findMany({
-    where,
-    include: { patient: true, therapist: { include: { user: true } }, treatmentPlan: true },
-    orderBy: { createdAt: 'desc' },
-    skip: ((query.page || 1) - 1) * (query.limit || 20),
-    take: query.limit || 20,
-  });
-  const total = await prisma.clientTask.count({ where });
+  const [items, total] = await Promise.all([
+    prisma.clientTask.findMany({
+      where,
+      include: { patient: true, therapist: { include: { user: true } }, treatmentPlan: true },
+      orderBy: { createdAt: 'desc' },
+      skip: ((query.page || 1) - 1) * (query.limit || 20),
+      take: query.limit || 20,
+    }),
+    prisma.clientTask.count({ where }),
+  ]);
   return { items, total, page: query.page || 1, limit: query.limit || 20 };
 }
 
@@ -97,12 +99,15 @@ export async function sendTaskEmail(tenantId: string, id: string) {
 }
 
 export async function getTaskStats(tenantId: string) {
-  const total = await prisma.clientTask.count({ where: { tenantId } });
-  const pending = await prisma.clientTask.count({ where: { tenantId, status: 'PENDING' } });
-  const sent = await prisma.clientTask.count({ where: { tenantId, status: 'SENT' } });
-  const completed = await prisma.clientTask.count({ where: { tenantId, status: 'COMPLETED' } });
-  const overdue = await prisma.clientTask.count({
-    where: { tenantId, dueDate: { lt: new Date() }, status: { in: ['PENDING', 'SENT'] } },
-  });
+  const now = new Date();
+  const [total, pending, sent, completed, overdue] = await Promise.all([
+    prisma.clientTask.count({ where: { tenantId } }),
+    prisma.clientTask.count({ where: { tenantId, status: 'PENDING' } }),
+    prisma.clientTask.count({ where: { tenantId, status: 'SENT' } }),
+    prisma.clientTask.count({ where: { tenantId, status: 'COMPLETED' } }),
+    prisma.clientTask.count({
+      where: { tenantId, dueDate: { lt: now }, status: { in: ['PENDING', 'SENT'] } },
+    }),
+  ]);
   return { total, pending, sent, completed, overdue, completionRate: total ? Math.round((completed / total) * 100) : 0 };
 }

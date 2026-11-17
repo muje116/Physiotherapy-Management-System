@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
-import { redisConnection } from './redis';
+import { redisProducerConnection } from './redis';
 
 export const invoiceQueue = new Queue('invoices', {
-  connection: redisConnection,
+  connection: redisProducerConnection,
 });

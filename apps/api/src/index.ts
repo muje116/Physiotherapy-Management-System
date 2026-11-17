@@ -121,60 +121,49 @@ async function buildApp() {
   }));
 
   app.setErrorHandler((error, request, reply) => {
+    const requestId = String(request.id);
+    const sendError = (statusCode: number, code: string, message: string, details?: unknown) => reply.status(statusCode).send({
+      success: false,
+      error: {
+        code,
+        message,
+        ...(details === undefined ? {} : { details }),
+        requestId,
+      },
+    });
+
     if (error.name === 'ZodError') {
-      return reply.status(400).send({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Validation failed',
-          details: (error as any).errors,
-        },
-      });
+      return sendError(400, 'VALIDATION_ERROR', 'Validation failed', (error as any).errors);
     }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        return reply.status(409).send({ success: false, error: { code: 'CONFLICT', message: 'Resource already exists' } });
+        return sendError(409, 'CONFLICT', 'Resource already exists');
       }
       if (error.code === 'P2025') {
-        return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } });
+        return sendError(404, 'NOT_FOUND', 'Resource not found');
       }
       if (error.code === 'P2004') {
-        return reply.status(409).send({ success: false, error: { code: 'CONFLICT', message: 'The requested change conflicts with existing data' } });
+        return sendError(409, 'CONFLICT', 'The requested change conflicts with existing data');
       }
     }
 
     if (error instanceof AppError) {
-      return reply.status(error.statusCode).send({
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: (error as any).details || undefined,
-        },
-      });
+      if (error.statusCode >= 500) {
+        request.log.error({ err: error, requestId }, 'Request failed');
+        return sendError(error.statusCode, error.code, error.message);
+      }
+      return sendError(error.statusCode, error.code, error.message, (error as any).details);
     }
 
     if (error.statusCode === 429) {
-      return reply.status(429).send({
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many requests, please try again later',
-        },
-      });
+      return sendError(429, 'RATE_LIMIT_EXCEEDED', 'Too many requests, please try again later');
     }
 
-    request.log.error(error);
+    request.log.error({ err: error, requestId }, 'Unhandled request error');
 
     const statusCode = (error as any).statusCode || 500;
-    return reply.status(statusCode).send({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: statusCode === 500 ? 'Internal server error' : error.message,
-      },
-    });
+    return sendError(statusCode, 'INTERNAL_ERROR', statusCode >= 500 ? 'Internal server error' : error.message);
   });
 
   await app.register(authRoutes, { prefix: '/api/v1' });

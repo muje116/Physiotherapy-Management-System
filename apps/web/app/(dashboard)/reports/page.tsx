@@ -21,6 +21,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/auth-context';
+import { formatCurrency } from '@/lib/utils';
 
 interface DashboardData {
   outcomeData: { month: string; averageScore: number; measureCount: number }[];
@@ -218,10 +220,6 @@ function reportQuery(filters: DateFilters, extras: Record<string, string> = {}) 
   return params.toString();
 }
 
-function formatMoney(value: number) {
-  return `R ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function formatDate(value?: string | null) {
   if (!value) return '-';
   return new Date(value).toLocaleDateString();
@@ -254,6 +252,9 @@ function downloadCsv(rows: unknown[][], filename: string) {
 }
 
 export default function ReportsPage() {
+  const { user } = useAuth();
+  const currency = user?.tenant?.currency || 'ZAR';
+  const formatMoney = (value: number) => formatCurrency(Number(value || 0), currency);
   const [filters, setFilters] = useState<DateFilters>(() => defaultDateFilters());
   const [memberMethod, setMemberMethod] = useState('');
   const [memberStatus, setMemberStatus] = useState('');

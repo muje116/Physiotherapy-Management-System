@@ -46,6 +46,13 @@ enum InvoiceStatus {
   VOID
 }
 
+enum ExercisePlanSendStatus {
+  DRAFT
+  QUEUED
+  SENT
+  FAILED
+}
+
 model Tenant {
   id             String   @id @default(uuid())
   name           String
@@ -358,6 +365,8 @@ model ExercisePlan {
   name      String
   isActive  Boolean   @default(true)
   sentAt    DateTime?
+  sendStatus ExercisePlanSendStatus @default(DRAFT)
+  sendError  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

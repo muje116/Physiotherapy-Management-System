@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HeartPulse, LogOut, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
+import { AccessDenied } from '@/components/access-denied';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const { logout, user, isAuthenticated, loading } = useAuth();
@@ -26,6 +27,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   if (!isAuthenticated) return null;
+
+  if (user?.role !== 'PATIENT') {
+    return <AccessDenied canViewDashboard={user?.permissions?.includes('finance:read')} />;
+  }
 
   return (
     <div className="min-h-screen bg-muted/20">

@@ -5,7 +5,13 @@ let redis: Redis | null = null;
 
 function getClient(): Redis {
   if (!redis) {
-    redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 3 });
+    redis = new Redis(redisUrl, {
+      lazyConnect: true,
+      connectTimeout: 3000,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      retryStrategy: () => null,
+    });
   }
   return redis;
 }

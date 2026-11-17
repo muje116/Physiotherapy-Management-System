@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Loader2, Bell, Mail, MessageSquare, Phone } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { hasPermission } from '@/lib/permissions';
 
 interface Template {
   id: string; name: string; trigger: string; channel: string[]; subject: string; body: string; isActive: boolean;
@@ -65,6 +67,8 @@ const FOLLOW_UP_TYPE_OPTIONS = [
 ];
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
+  const canWrite = hasPermission(user, 'notification:write');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -122,7 +126,7 @@ export default function NotificationsPage() {
         contacted: statsRes.data.data.contacted || 0,
         reengagementRate: `${statsRes.data.data.reengagementRate}%`,
       } : null);
-    }).catch(err => setError(err.message))
+    }).catch(err => setError(err.message || err.response?.data?.error?.message || 'Unable to load notifications'))
       .finally(() => setLoading(false));
   };
 
@@ -224,7 +228,6 @@ export default function NotificationsPage() {
   };
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-64" /></div>;
-  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -233,7 +236,12 @@ export default function NotificationsPage() {
         <p className="text-muted-foreground">Manage templates, channels, and follow-ups</p>
       </div>
 
-      {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <span>{error}</span>
+          <Button size="sm" variant="outline" onClick={() => fetchData()}>Retry</Button>
+        </div>
+      )}
 
       <Tabs defaultValue="templates">
         <TabsList>
@@ -245,56 +253,58 @@ export default function NotificationsPage() {
         <TabsContent value="templates">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">{templates.length} template(s)</p>
-            <Dialog open={templateDialog} onOpenChange={setTemplateDialog}>
-              <DialogTrigger asChild>
-                <Button onClick={openNewTemplate}><Plus className="h-4 w-4 mr-2" /> New Template</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingTemplate ? 'Edit Template' : 'New Template'}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Name</Label>
-                    <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Appointment Reminder" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Trigger</Label>
-                    <Select options={TRIGGER_OPTIONS} value={formTrigger} onChange={(e) => setFormTrigger(e.target.value)} placeholder="Select trigger" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Channel(s)</Label>
-                    <div className="flex gap-4">
-                      {CHANNEL_OPTIONS.map(ch => (
-                        <label key={ch.value} className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" checked={formChannel.includes(ch.value)} onChange={(e) => {
-                            if (e.target.checked) setFormChannel([...formChannel, ch.value]);
-                            else setFormChannel(formChannel.filter(c => c !== ch.value));
-                          }} className="rounded" />
-                          {ch.label}
-                        </label>
-                      ))}
+            {canWrite && (
+              <Dialog open={templateDialog} onOpenChange={setTemplateDialog}>
+                <DialogTrigger asChild>
+                  <Button onClick={openNewTemplate}><Plus className="h-4 w-4 mr-2" /> New Template</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingTemplate ? 'Edit Template' : 'New Template'}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Name</Label>
+                      <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Appointment Reminder" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Trigger</Label>
+                      <Select options={TRIGGER_OPTIONS} value={formTrigger} onChange={(e) => setFormTrigger(e.target.value)} placeholder="Select trigger" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Channel(s)</Label>
+                      <div className="flex gap-4">
+                        {CHANNEL_OPTIONS.map(ch => (
+                          <label key={ch.value} className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={formChannel.includes(ch.value)} onChange={(e) => {
+                              if (e.target.checked) setFormChannel([...formChannel, ch.value]);
+                              else setFormChannel(formChannel.filter(c => c !== ch.value));
+                            }} className="rounded" />
+                            {ch.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <Input value={formSubject} onChange={(e) => setFormSubject(e.target.value)} placeholder="Subject line (email only)" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Body</Label>
+                      <Textarea value={formBody} onChange={(e) => setFormBody(e.target.value)} rows={5} placeholder="Use {{patientName}}, {{appointmentDate}}, {{therapistName}} etc." />
+                      <p className="text-xs text-muted-foreground">Available variables: {'{{patientName}}'}, {'{{appointmentDate}}'}, {'{{therapistName}}'}, {'{{clinicName}}'}</p>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <DialogClose asChild><Button variant="outline" onClick={resetForm}>Cancel</Button></DialogClose>
+                      <Button onClick={saveTemplate} disabled={saving}>
+                        {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                        {editingTemplate ? 'Update' : 'Create'}
+                      </Button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <Input value={formSubject} onChange={(e) => setFormSubject(e.target.value)} placeholder="Subject line (email only)" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Body</Label>
-                    <Textarea value={formBody} onChange={(e) => setFormBody(e.target.value)} rows={5} placeholder="Use {{patientName}}, {{appointmentDate}}, {{therapistName}} etc." />
-                    <p className="text-xs text-muted-foreground">Available variables: {'{{patientName}}'}, {'{{appointmentDate}}'}, {'{{therapistName}}'}, {'{{clinicName}}'}</p>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <DialogClose asChild><Button variant="outline" onClick={resetForm}>Cancel</Button></DialogClose>
-                    <Button onClick={saveTemplate} disabled={saving}>
-                      {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      {editingTemplate ? 'Update' : 'Create'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
           <Card>
             <CardContent className="p-0">
@@ -317,11 +327,13 @@ export default function NotificationsPage() {
                       <TableCell>{tpl.channel?.join(', ') || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{tpl.subject || '-'}</TableCell>
                       <TableCell>
-                        <Switch checked={tpl.isActive} onCheckedChange={(checked) => toggleTemplate(tpl.id, checked)} />
+                        <Switch disabled={!canWrite} checked={tpl.isActive} onCheckedChange={(checked) => toggleTemplate(tpl.id, checked)} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => openEditTemplate(tpl)}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteTemplate(tpl.id)}><Trash2 className="h-4 w-4" /></Button>
+                        {canWrite && <>
+                          <Button variant="ghost" size="icon" onClick={() => openEditTemplate(tpl)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => deleteTemplate(tpl.id)}><Trash2 className="h-4 w-4" /></Button>
+                        </>}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -337,7 +349,7 @@ export default function NotificationsPage() {
         <TabsContent value="channels">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {channels.map(ch => (
-              <ChannelCard key={ch.id} channel={ch} onToggle={toggleChannel} onSave={saveChannel} />
+              <ChannelCard key={ch.id} channel={ch} onToggle={toggleChannel} onSave={saveChannel} readOnly={!canWrite} />
             ))}
             {channels.length === 0 && (
               <p className="text-muted-foreground col-span-full text-center py-8">No channels configured</p>
@@ -379,12 +391,13 @@ export default function NotificationsPage() {
                           options={FOLLOW_UP_STATUS_OPTIONS}
                           value={fu.status}
                           onChange={(e) => updateFollowUpStatus(fu.id, e.target.value)}
+                          disabled={!canWrite}
                         />
                       </TableCell>
                       <TableCell>{fu.followUpDate}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{fu.notes || '-'}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => updateFollowUpStatus(fu.id, 'CLOSED')}>Close</Button>
+                        {canWrite && <Button variant="ghost" size="sm" onClick={() => updateFollowUpStatus(fu.id, 'CLOSED')}>Close</Button>}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -401,7 +414,7 @@ export default function NotificationsPage() {
   );
 }
 
-function ChannelCard({ channel, onToggle, onSave }: { channel: Channel; onToggle: (id: string, active: boolean) => void; onSave: (ch: Channel) => void }) {
+function ChannelCard({ channel, onToggle, onSave, readOnly = false }: { channel: Channel; onToggle: (id: string, active: boolean) => void; onSave: (ch: Channel) => void; readOnly?: boolean }) {
   const [apiKey, setApiKey] = useState('');
   const [fromField, setFromField] = useState(channel.fromField || '');
   const [accountSid, setAccountSid] = useState(channel.accountSid || '');
@@ -424,27 +437,29 @@ function ChannelCard({ channel, onToggle, onSave }: { channel: Channel; onToggle
           </div>
           <CardTitle className="text-sm font-medium">{channel.name}</CardTitle>
         </div>
-        <Switch checked={channel.isActive} onCheckedChange={(checked) => onToggle(channel.id, checked)} />
+        <Switch disabled={readOnly} checked={channel.isActive} onCheckedChange={(checked) => onToggle(channel.id, checked)} />
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">API Key</Label>
-          <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" placeholder={channel.hasApiKey ? 'Leave blank to keep saved key' : 'Enter API key'} />
+          <Input disabled={readOnly} value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" placeholder={channel.hasApiKey ? 'Leave blank to keep saved key' : 'Enter API key'} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">From</Label>
-          <Input value={fromField} onChange={(e) => setFromField(e.target.value)} placeholder="Sender ID / email" />
+          <Input disabled={readOnly} value={fromField} onChange={(e) => setFromField(e.target.value)} placeholder="Sender ID / email" />
         </div>
         {channel.type.startsWith('TWILIO_') && (
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Twilio Account SID</Label>
-            <Input value={accountSid} onChange={(e) => setAccountSid(e.target.value)} placeholder="AC..." />
+            <Input disabled={readOnly} value={accountSid} onChange={(e) => setAccountSid(e.target.value)} placeholder="AC..." />
           </div>
         )}
-        <Button size="sm" className="w-full" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : null}
-          Save
-        </Button>
+        {!readOnly && (
+          <Button size="sm" className="w-full" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : null}
+            Save
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

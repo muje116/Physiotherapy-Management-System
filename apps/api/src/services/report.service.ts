@@ -58,6 +58,8 @@ export async function getDashboard(tenantId: string) {
     outstandingInvoices,
     totalAppointments,
     noShowAppointments,
+    settings,
+    appointments,
   ] = await Promise.all([
     prisma.appointment.count({ where: { tenantId, startAt: { gte: todayStart, lte: todayEnd } } }),
     prisma.patient.count({ where: { tenantId, createdAt: { gte: monthStart, lte: monthEnd } } }),
@@ -68,11 +70,15 @@ export async function getDashboard(tenantId: string) {
     prisma.invoice.count({ where: { tenantId, status: { in: [InvoiceStatus.UNPAID, InvoiceStatus.OVERDUE] } } }),
     prisma.appointment.count({ where: { tenantId, startAt: { gte: monthStart, lte: monthEnd } } }),
     prisma.appointment.count({ where: { tenantId, status: AppointmentStatus.NO_SHOW, startAt: { gte: monthStart, lte: monthEnd } } }),
+    prisma.tenantSettings.findUnique({ where: { tenantId } }),
+    prisma.appointment.findMany({
+      where: { tenantId, status: { notIn: ['CANCELLED' as any, 'NO_SHOW' as any] }, startAt: { gte: monthStart, lte: monthEnd } },
+      select: { startAt: true, endAt: true },
+    }),
   ]);
 
   const noShowRate = totalAppointments > 0 ? Math.round((noShowAppointments / totalAppointments) * 100) : 0;
 
-  const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
   const workDays = settings?.workingDays?.length || 5;
   const workStart = settings?.workingHoursStart || '08:00';
   const workEnd = settings?.workingHoursEnd || '17:00';
@@ -83,10 +89,6 @@ export async function getDashboard(tenantId: string) {
 
   let utilisation = 0;
   if (totalAvailableMinutes > 0) {
-    const appointments = await prisma.appointment.findMany({
-      where: { tenantId, status: { notIn: ['CANCELLED' as any, 'NO_SHOW' as any] }, startAt: { gte: monthStart, lte: monthEnd } },
-      select: { startAt: true, endAt: true },
-    });
     const totalBookedMinutes = appointments.reduce((sum, a) => {
       return sum + (a.endAt.getTime() - a.startAt.getTime()) / 60000;
     }, 0);

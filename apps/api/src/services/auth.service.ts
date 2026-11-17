@@ -18,6 +18,12 @@ function generateAccessToken(payload: { sub: string; tenantId: string; role: Rol
   return jwt.sign(payload, getJwtAccessSecret(), { expiresIn: '15m' });
 }
 
+function permissionsForRole(role: Role) {
+  return Object.entries(PERMISSIONS)
+    .filter(([_, roles]) => (roles as readonly string[]).includes(role))
+    .map(([permission]) => permission);
+}
+
 async function generateRefreshToken(userId: string): Promise<string> {
   const rawToken = crypto.randomUUID();
   const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -88,6 +94,7 @@ export async function registerTenant(data: {
       lastName: user.lastName,
       role: user.role,
       tenantId: tenant.id,
+      permissions: permissionsForRole(user.role),
     },
   };
 }
@@ -129,6 +136,8 @@ export async function login(email: string, password: string, tenantSlug?: string
       lastName: user.lastName,
       role: user.role,
       tenantId: user.tenantId,
+      tenant: { name: user.tenant.name, logoUrl: user.tenant.logoUrl, currency: user.tenant.currency, timezone: user.tenant.timezone },
+      permissions: permissionsForRole(user.role),
     },
   };
 }
@@ -220,10 +229,6 @@ export async function getMe(userId: string) {
 
   if (!user) throw new NotFoundError('User not found');
 
-  const permissions = Object.entries(PERMISSIONS)
-    .filter(([_, roles]) => (roles as readonly string[]).includes(user.role))
-    .map(([permission]) => permission);
-
   return {
     id: user.id,
     email: user.email,
@@ -231,7 +236,7 @@ export async function getMe(userId: string) {
     lastName: user.lastName,
     role: user.role,
     tenantId: user.tenantId,
-    tenant: user.tenant,
-    permissions,
+    tenant: { name: user.tenant.name, logoUrl: user.tenant.logoUrl, currency: user.tenant.currency, timezone: user.tenant.timezone },
+    permissions: permissionsForRole(user.role),
   };
 }

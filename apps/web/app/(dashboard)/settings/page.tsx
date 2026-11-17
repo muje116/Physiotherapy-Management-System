@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Save } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
 
 interface ClinicSettings {
   name: string;
@@ -19,8 +20,13 @@ interface ClinicSettings {
   vatNumber: string;
   timezone: string;
   currency: string;
-  email: string;
-  address: string;
+  logoUrl: string;
+}
+
+interface EmailSettings {
+  from: string;
+  enabled: boolean;
+  hasApiKey: boolean;
 }
 
 interface WorkingHour {
@@ -47,6 +53,7 @@ const DAYS = [
 ];
 
 export default function SettingsPage() {
+  const { user, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +64,12 @@ export default function SettingsPage() {
     vatNumber: '',
     timezone: 'Africa/Johannesburg',
     currency: 'ZAR',
-    email: '',
-    address: '',
+    logoUrl: '',
   });
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>({ from: '', enabled: false, hasApiKey: false });
+  const [emailApiKey, setEmailApiKey] = useState('');
+  const [emailTestRecipient, setEmailTestRecipient] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
   const [workingHours, setWorkingHours] = useState<Record<string, WorkingHour>>({});
   const [integrations, setIntegrations] = useState<IntegrationState>({
     sms: { enabled: false },
@@ -73,8 +83,9 @@ export default function SettingsPage() {
       api.get('/settings/tenant'),
       api.get('/settings'),
       api.get('/settings/integrations'),
+      api.get('/settings/email'),
     ])
-      .then(([tenantRes, settingsRes, integrationsRes]) => {
+      .then(([tenantRes, settingsRes, integrationsRes, emailRes]) => {
         const tenant = tenantRes.data.data;
         const settings = settingsRes.data.data;
 
@@ -84,8 +95,7 @@ export default function SettingsPage() {
           vatNumber: tenant.vatNumber || '',
           timezone: tenant.timezone || 'Africa/Johannesburg',
           currency: tenant.currency || 'ZAR',
-          email: '',
-          address: '',
+          logoUrl: tenant.logoUrl || '',
         });
 
         const nextHours = DAYS.reduce<Record<string, WorkingHour>>((acc, day) => {
@@ -98,11 +108,14 @@ export default function SettingsPage() {
         }, {});
 
         setWorkingHours(nextHours);
-        setIntegrations(integrationsRes.data.data);
+        const nextEmail = emailRes.data.data as EmailSettings;
+        setEmailSettings(nextEmail);
+        setIntegrations({ ...integrationsRes.data.data, email: { enabled: nextEmail.enabled } });
+        setEmailTestRecipient(user?.email || '');
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.email]);
 
   const saveClinic = async () => {
     setSaving(true);
@@ -115,7 +128,9 @@ export default function SettingsPage() {
         vatNumber: clinic.vatNumber,
         timezone: clinic.timezone,
         currency: clinic.currency,
+        logoUrl: clinic.logoUrl.trim(),
       });
+      if (user) updateUser({ tenant: { ...user.tenant, name: clinic.name, logoUrl: clinic.logoUrl.trim() || null, currency: clinic.currency, timezone: clinic.timezone } });
       setSuccess('Clinic details saved successfully');
     } catch (err: any) {
       setError(err.message);
@@ -159,6 +174,41 @@ export default function SettingsPage() {
     }
   };
 
+  const saveEmailSettings = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { data } = await api.patch('/settings/email', {
+        apiKey: emailApiKey.trim() || undefined,
+        from: emailSettings.from.trim(),
+        enabled: emailSettings.enabled,
+      });
+      setEmailSettings(data.data);
+      setEmailApiKey('');
+      setIntegrations((current) => ({ ...current, email: { enabled: data.data.enabled } }));
+      setSuccess('Email settings saved.');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setTestingEmail(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.post('/settings/email/test', { to: emailTestRecipient });
+      setSuccess(`Test email sent to ${emailTestRecipient}.`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -183,6 +233,7 @@ export default function SettingsPage() {
           <TabsTrigger value="clinic">Clinic Details</TabsTrigger>
           <TabsTrigger value="hours">Working Hours</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+        <TabsTrigger value="email">Email</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clinic">
@@ -194,6 +245,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Clinic Name" value={clinic.name} onChange={(value) => setClinic({ ...clinic, name: value })} />
+                <Field label="Logo URL" value={clinic.logoUrl} onChange={(value) => setClinic({ ...clinic, logoUrl: value })} placeholder="https://example.com/logo.png" />
                 <Field label="Practice Number" value={clinic.practiceNo} onChange={(value) => setClinic({ ...clinic, practiceNo: value })} />
                 <Field label="VAT Number" value={clinic.vatNumber} onChange={(value) => setClinic({ ...clinic, vatNumber: value })} />
                 <div className="space-y-2">
@@ -213,6 +265,12 @@ export default function SettingsPage() {
                   <Select
                     options={[
                       { value: 'ZAR', label: 'ZAR (R)' },
+                      { value: 'MWK', label: 'MWK (MK)' },
+                      { value: 'KES', label: 'KES (KSh)' },
+                      { value: 'TZS', label: 'TZS (TSh)' },
+                      { value: 'UGX', label: 'UGX (USh)' },
+                      { value: 'BWP', label: 'BWP (P)' },
+                      { value: 'ZMW', label: 'ZMW (K)' },
                       { value: 'USD', label: 'USD ($)' },
                       { value: 'EUR', label: 'EUR (EUR)' },
                       { value: 'GBP', label: 'GBP (GBP)' },
@@ -221,9 +279,7 @@ export default function SettingsPage() {
                     onChange={(e) => setClinic({ ...clinic, currency: e.target.value })}
                   />
                 </div>
-                <Field label="Clinic Email" type="email" value={clinic.email} onChange={(value) => setClinic({ ...clinic, email: value })} />
               </div>
-              <Field label="Address" value={clinic.address} onChange={(value) => setClinic({ ...clinic, address: value })} />
               <Separator />
               <div className="flex justify-end">
                 <Button onClick={saveClinic} disabled={saving}>
@@ -300,11 +356,42 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
               <IntegrationRow label="SMS" desc="Send appointment reminders via SMS" checked={integrations.sms.enabled} onCheckedChange={(checked) => saveIntegration('sms', checked)} />
               <Separator />
-              <IntegrationRow label="Email" desc="Send transactional email updates" checked={integrations.email.enabled} onCheckedChange={(checked) => saveIntegration('email', checked)} />
-              <Separator />
               <IntegrationRow label="Medical Aid Switch" desc="Submit medical aid claims electronically" checked={integrations.medicalAid.enabled} onCheckedChange={(checked) => saveIntegration('medicalAid', checked)} />
               <Separator />
               <IntegrationRow label="Xero Accounting" desc="Sync invoices and payments with Xero" checked={integrations.xero.enabled} onCheckedChange={(checked) => saveIntegration('xero', checked)} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="email">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Transactional email</CardTitle>
+              <CardDescription>Configure Resend for reminders, exercise plans, and account email.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="resend-api-key">Resend API key</Label>
+                  <Input id="resend-api-key" type="password" autoComplete="new-password" value={emailApiKey} onChange={(event) => setEmailApiKey(event.target.value)} placeholder={emailSettings.hasApiKey ? 'Key stored — enter a new key to replace it' : 're_…'} />
+                  <p className="text-xs text-muted-foreground">The stored key is never shown again. Leave this blank to keep the existing key.</p>
+                </div>
+                <Field label="Sender address" value={emailSettings.from} onChange={(value) => setEmailSettings((current) => ({ ...current, from: value }))} placeholder="PhysioCare <noreply@example.com>" />
+              </div>
+              <IntegrationRow label="Enable email delivery" desc={emailSettings.hasApiKey ? 'Use the saved Resend settings for clinic messages' : 'Add a Resend API key before sending messages'} checked={emailSettings.enabled} onCheckedChange={(enabled) => setEmailSettings((current) => ({ ...current, enabled }))} />
+              {emailSettings.hasApiKey && <p className="text-xs text-muted-foreground">A Resend API key is stored for this clinic.</p>}
+              <Separator />
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[240px] flex-1 space-y-2">
+                  <Label htmlFor="email-test-recipient">Test recipient</Label>
+                  <Input id="email-test-recipient" type="email" value={emailTestRecipient} onChange={(event) => setEmailTestRecipient(event.target.value)} placeholder="you@example.com" />
+                </div>
+                <Button variant="outline" onClick={() => void sendTestEmail()} disabled={testingEmail || !emailTestRecipient.trim()}>
+                  {testingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Send test email
+                </Button>
+                <Button onClick={() => void saveEmailSettings()} disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save email settings
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -313,11 +400,11 @@ export default function SettingsPage() {
   );
 }
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }

@@ -12,6 +12,8 @@ import { Plus, Search, Download, Eye, Loader2, CheckCircle2, Send } from 'lucide
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { formatCurrency } from '@/lib/utils';
 
 interface InvoiceRow {
   id: string;
@@ -57,10 +59,6 @@ function formatDate(value?: string | null) {
   return value ? new Date(value).toISOString().split('T')[0] : '-';
 }
 
-function formatMoney(value: number) {
-  return `R ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function mapInvoice(invoice: any): InvoiceRow {
   return {
     id: invoice.id,
@@ -92,6 +90,9 @@ function mapInvoiceDetail(invoice: any): InvoiceDetail {
 }
 
 export default function InvoicesPage() {
+  const { user } = useAuth();
+  const currency = user?.tenant?.currency || 'ZAR';
+  const formatMoney = (value: number) => formatCurrency(value, currency);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);

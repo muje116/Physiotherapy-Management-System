@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle, HeartPulse, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import api from '@/lib/api';
+import { AuthShell } from '@/components/auth-shell';
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState('');
@@ -50,54 +50,86 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center space-y-4">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-            <h2 className="text-xl font-semibold">Password updated</h2>
-            <p className="text-sm text-muted-foreground">Your password has been reset. You can now sign in.</p>
-            <Link href="/login" className="text-sm text-primary hover:underline inline-flex items-center gap-1">
-              <ArrowLeft className="h-3 w-3" /> Back to login
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell
+        eyebrow="All set"
+        title="You’re ready to move forward."
+        description="Your password has been reset. You can now securely sign in to your practice."
+        icon={<CheckCircle2 className="h-5 w-5" />}
+      >
+        <div className="rounded-2xl border border-[#dcebdd] bg-[#f5faf5] p-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e5f2e7] text-[#418262]">
+              <ShieldCheck className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-[#315848]">Password updated</p>
+              <p className="mt-1 text-sm leading-6 text-[#74877f]">Your account is secure and ready to use.</p>
+            </div>
+          </div>
+        </div>
+        <Link href="/login" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#438262] transition hover:text-[#1d624b]">
+          <ArrowLeft className="h-4 w-4" /> Back to sign in
+        </Link>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-2">
-          <div className="flex justify-center mb-2">
-            <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-              <HeartPulse className="h-7 w-7 text-white" />
-            </div>
+    <AuthShell
+      eyebrow="Secure your account"
+      title="Choose a new password."
+      description="Use at least 8 characters, then sign in again."
+      icon={<KeyRound className="h-5 w-5" />}
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
-          <CardTitle className="text-xl">Choose a new password</CardTitle>
-          <CardDescription>Use at least 8 characters, then sign in again.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={loading} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmation">Confirm password</Label>
-              <Input id="confirmation" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required disabled={loading} />
-            </div>
-            <Button className="w-full" size="lg" type="submit" disabled={loading}>
-              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Updating...' : 'Update password'}
-            </Button>
-            <div className="text-center">
-              <Link href="/login" className="text-xs text-primary hover:underline">Back to login</Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-sm font-semibold text-[#315848]">New password</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            minLength={8}
+            disabled={loading}
+            className="h-12 rounded-xl border-[#dbe5dc] bg-[#fbfcfa] px-4 focus-visible:ring-[#4a956a]"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmation" className="text-sm font-semibold text-[#315848]">Confirm new password</Label>
+          <Input
+            id="confirmation"
+            type="password"
+            autoComplete="new-password"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            required
+            minLength={8}
+            disabled={loading}
+            className="h-12 rounded-xl border-[#dbe5dc] bg-[#fbfcfa] px-4 focus-visible:ring-[#4a956a]"
+          />
+        </div>
+        <p className="flex items-center gap-2 text-xs text-[#7b8e85]">
+          <ShieldCheck className="h-4 w-4 text-[#58906c]" /> Use at least 8 characters for a strong password.
+        </p>
+        <Button
+          className="h-12 w-full rounded-xl bg-[#1d624b] text-white shadow-lg shadow-[#1d624b]/15 transition hover:bg-[#174f3d]"
+          type="submit"
+          disabled={loading}
+        >
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {loading ? 'Updating...' : <>Update password <ArrowRight className="ml-2 h-4 w-4" /></>}
+        </Button>
+      </form>
+      <Link href="/login" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#438262] transition hover:text-[#1d624b]">
+        <ArrowLeft className="h-4 w-4" /> Back to sign in
+      </Link>
+    </AuthShell>
   );
 }
